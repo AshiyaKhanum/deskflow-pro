@@ -76,6 +76,18 @@ export async function listActiveAgents() {
   return User.find({ role: 'agent', isActive: true }).select('_id name email').sort({ name: 1 });
 }
 
+/**
+ * Eligible ticket assignees: active agents AND active customers (per the explicit
+ * business rule that a ticket may be handed to either) - admins are deliberately
+ * excluded, they manage the system rather than carry a ticket workload. Includes
+ * `role` so callers can label each option (e.g. "Rahul - Agent").
+ */
+export async function listAssignableUsers() {
+  return User.find({ role: { $in: ['agent', 'customer'] }, isActive: true })
+    .select('_id name email role')
+    .sort({ role: 1, name: 1 });
+}
+
 /** Used by the "click a name to see the account" views - always a live lookup, never a static/cached copy. */
 export async function getUserById(userId: string) {
   const user = await User.findById(userId);

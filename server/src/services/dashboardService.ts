@@ -151,7 +151,7 @@ export async function getRecentActivity(limit = 10) {
     .sort({ updatedAt: -1 })
     .limit(limit)
     .populate('customer', 'name email')
-    .populate('assignedAgent', 'name email')
+    .populate('assignedAgent', 'name email role')
     .select('ticketNumber title status priority updatedAt createdAt customer assignedAgent');
 }
 

@@ -52,19 +52,47 @@ describe('Ticket creation - optional "assign to" agent', () => {
     expect(createRes.body.data.assignedAgent).toBeNull();
   });
 
-  it('rejects a request that names a non-agent (or non-existent) user as the assignee', async () => {
+  it('lets a customer request another customer as the assignee (customers are an eligible assignee role)', async () => {
     const { token: customerToken } = await registerAndLogin('customer');
-    const otherCustomer = await createUserDirect('customer', { email: 'not-an-agent@example.com' });
+    const otherCustomer = await createUserDirect('customer', { email: 'assignee-customer@example.com' });
+
+    const createRes = await request(app)
+      .post('/api/tickets')
+      .set('Authorization', `Bearer ${customerToken}`)
+      .send({
+        title: 'Assigning to a fellow customer',
+        description: 'Customers are an explicitly eligible assignee role in this app.',
+        priority: 'low',
+        category: 'general',
+        assignedAgent: String(otherCustomer._id),
+      });
+
+    expect(createRes.status).toBe(201);
+    expect(createRes.body.data.assignedAgent._id ?? createRes.body.data.assignedAgent).toBe(
+      String(otherCustomer._id),
+    );
+
+    // The assignee must be able to see the ticket even though they didn't file it.
+    const assigneeToken = await loginAs('assignee-customer@example.com');
+    const getRes = await request(app)
+      .get(`/api/tickets/${createRes.body.data._id}`)
+      .set('Authorization', `Bearer ${assigneeToken}`);
+    expect(getRes.status).toBe(200);
+  });
+
+  it('rejects a request that names an admin (or non-existent user) as the assignee', async () => {
+    const { token: customerToken } = await registerAndLogin('customer');
+    const admin = await createUserDirect('admin', { email: 'not-eligible-admin@example.com' });
 
     const res = await request(app)
       .post('/api/tickets')
       .set('Authorization', `Bearer ${customerToken}`)
       .send({
-        title: 'Trying to assign a customer as if they were an agent',
-        description: 'This should be rejected by the backend regardless of what the client sends.',
+        title: 'Trying to assign an admin, who is not an eligible assignee role',
+        description: 'Admins administer the system rather than carry ticket workload.',
         priority: 'low',
         category: 'general',
-        assignedAgent: String(otherCustomer._id),
+        assignedAgent: String(admin._id),
       });
 
     expect(res.status).toBe(400);

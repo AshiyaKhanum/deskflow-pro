@@ -14,6 +14,11 @@ export const listAgents = asyncHandler(async (_req: Request, res: Response) => {
   res.status(200).json({ success: true, data: agents.map(toPublicUser) });
 });
 
+export const listAssignableUsers = asyncHandler(async (_req: Request, res: Response) => {
+  const users = await userService.listAssignableUsers();
+  res.status(200).json({ success: true, data: users.map(toPublicUser) });
+});
+
 export const getUser = asyncHandler(async (req: Request, res: Response) => {
   const user = await userService.getUserById(req.params.id);
   res.status(200).json({ success: true, data: toPublicUser(user) });

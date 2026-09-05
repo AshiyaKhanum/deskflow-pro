@@ -10,7 +10,7 @@ import { StatusBadge, PriorityBadge, SlaBadge } from '../components/TicketBadges
 import { Select } from '../components/ui/Select';
 import { Textarea } from '../components/ui/Textarea';
 import { Button } from '../components/ui/Button';
-import { formatDateTime, initials } from '../utils/format';
+import { formatDateTime, initials, roleLabel } from '../utils/format';
 import { TICKET_TRANSITIONS, TicketStatus } from '../types';
 import { normalizeError } from '../api/client';
 
@@ -33,8 +33,12 @@ export function TicketDetailPage() {
     refetch: refetchComments,
   } = useQuery(() => ticketService.listComments(id!), [id]);
 
-  const { data: agents } = useQuery(
-    () => (isAgentOrAdmin ? userService.listAgents() : Promise.resolve([])),
+  // The reassignment dropdown offers every eligible assignee (active agents AND active
+  // customers - see server/src/services/userService.listAssignableUsers), not just
+  // agents. Only admins can act on it (see the role check around the Select below),
+  // but agents/admins alike need the ticket's current assignee data to render correctly.
+  const { data: assignableUsers } = useQuery(
+    () => (isAgentOrAdmin ? userService.listAssignableUsers() : Promise.resolve([])),
     [isAgentOrAdmin],
   );
 
@@ -235,8 +239,14 @@ export function TicketDetailPage() {
                 <dd>{ticket.category.replace('_', ' ')}</dd>
               </div>
               <div className="detail-row">
-                <dt>Assigned agent</dt>
-                <dd>{ticket.assignedAgent?.name ?? 'Unassigned'}</dd>
+                <dt>Assignee</dt>
+                <dd>
+                  {ticket.assignedAgent
+                    ? `${ticket.assignedAgent.name}${
+                        ticket.assignedAgent.role ? ` - ${roleLabel(ticket.assignedAgent.role)}` : ''
+                      }`
+                    : 'Unassigned'}
+                </dd>
               </div>
               <div className="detail-row">
                 <dt>SLA due</dt>
@@ -291,19 +301,24 @@ export function TicketDetailPage() {
             <div className="card card-padded">
               <h2 style={{ fontSize: '1rem' }}>Assignment</h2>
               <Select
-                label="Assigned agent"
+                label="Assignee"
                 hideLabel
                 placeholder={
-                  agents && agents.length === 0 ? 'No assignees are available' : 'Unassigned'
+                  assignableUsers && assignableUsers.length === 0
+                    ? 'No assignees are available'
+                    : 'Unassigned'
                 }
-                options={(agents ?? []).map((a) => ({ value: a.id, label: a.name }))}
+                options={(assignableUsers ?? []).map((u) => ({
+                  value: u.id,
+                  label: `${u.name} - ${roleLabel(u.role)}`,
+                }))}
                 value={ticket.assignedAgent?._id ?? ''}
                 onChange={(e) => handleAssign(e.target.value)}
               />
-              {agents && agents.length === 0 && (
+              {assignableUsers && assignableUsers.length === 0 && (
                 <span className="form-hint">
-                  No agent accounts exist yet - add one from Admin &gt; Users to be able to assign
-                  this ticket.
+                  No eligible accounts exist yet - add one from Admin &gt; Users to be able to
+                  assign this ticket.
                 </span>
               )}
             </div>

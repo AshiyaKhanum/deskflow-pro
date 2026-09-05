@@ -24,6 +24,12 @@ export async function listAgents(): Promise<User[]> {
   return res.data.data;
 }
 
+/** Eligible ticket assignees - active agents AND active customers, fetched live from the database. */
+export async function listAssignableUsers(): Promise<User[]> {
+  const res = await apiClient.get<ApiResponse<User[]>>('/users/assignable');
+  return res.data.data;
+}
+
 /** Always a fresh, live lookup by id - used by "click a name to see the account" views. */
 export async function getUser(id: string): Promise<User> {
   const res = await apiClient.get<ApiResponse<User>>(`/users/${id}`);

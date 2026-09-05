@@ -1,4 +1,4 @@
-import { SlaStatus, TicketPriority, TicketStatus } from '../types';
+import { Role, SlaStatus, TicketPriority, TicketStatus } from '../types';
 
 export function formatDateTime(iso: string | null | undefined): string {
   if (!iso) return '—';
@@ -86,6 +86,17 @@ export function slaBadgeVariant(sla: SlaStatus): 'success' | 'warning' | 'danger
     default:
       return 'success';
   }
+}
+
+const ROLE_LABELS: Record<Role, string> = {
+  admin: 'Admin',
+  agent: 'Agent',
+  customer: 'Customer',
+};
+
+/** "agent" -> "Agent" - keeps role display consistent (dropdowns, ticket views, account details). */
+export function roleLabel(role: Role): string {
+  return ROLE_LABELS[role] ?? role;
 }
 
 export function initials(name: string): string {

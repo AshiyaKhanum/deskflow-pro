@@ -70,7 +70,7 @@ describe('TicketDetailPage', () => {
     vi.clearAllMocks();
     vi.mocked(ticketService.getTicket).mockResolvedValue(mockTicket);
     vi.mocked(ticketService.listComments).mockResolvedValue([publicComment]);
-    vi.mocked(userService.listAgents).mockResolvedValue([]);
+    vi.mocked(userService.listAssignableUsers).mockResolvedValue([]);
   });
 
   it('renders ticket details and public comments for a customer', async () => {

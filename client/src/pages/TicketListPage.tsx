@@ -10,7 +10,7 @@ import { Button } from '../components/ui/Button';
 import { Pagination } from '../components/ui/Pagination';
 import { EmptyState, ErrorState, TableSkeleton } from '../components/ui/States';
 import { StatusBadge, PriorityBadge, SlaBadge } from '../components/TicketBadges';
-import { formatDateTime } from '../utils/format';
+import { formatDateTime, roleLabel } from '../utils/format';
 import { TICKET_CATEGORIES, TICKET_PRIORITIES, TICKET_STATUSES, TicketListParams } from '../types';
 import { useAuth } from '../context/AuthContext';
 
@@ -216,7 +216,13 @@ export function TicketListPage() {
                     <td>
                       <PriorityBadge priority={ticket.priority} />
                     </td>
-                    <td>{ticket.assignedAgent?.name ?? 'Unassigned'}</td>
+                    <td>
+                      {ticket.assignedAgent
+                        ? `${ticket.assignedAgent.name}${
+                            ticket.assignedAgent.role ? ` - ${roleLabel(ticket.assignedAgent.role)}` : ''
+                          }`
+                        : 'Unassigned'}
+                    </td>
                     <td>
                       <SlaBadge sla={ticket.slaStatus} />
                     </td>

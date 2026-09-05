@@ -14,6 +14,7 @@ import {
   TicketPriority,
   User,
 } from '../types';
+import { roleLabel } from '../utils/format';
 import { useToast } from '../context/ToastContext';
 
 export function NewTicketPage() {
@@ -24,27 +25,29 @@ export function NewTicketPage() {
   const [category, setCategory] = useState<TicketCategory>('general');
   const [priority, setPriority] = useState<TicketPriority>('medium');
   const [assignedAgent, setAssignedAgent] = useState('');
-  const [agents, setAgents] = useState<User[]>([]);
-  // Distinguishes "still fetching" from "fetched, and there are genuinely zero active
-  // agents" - the dropdown needs to tell those two states apart instead of looking the
-  // same as "nobody has been chosen yet".
-  const [agentsLoaded, setAgentsLoaded] = useState(false);
+  // Eligible assignees - active agents AND active customers, fetched live from the
+  // database (see server/src/services/userService.listAssignableUsers).
+  const [assignableUsers, setAssignableUsers] = useState<User[]>([]);
+  // Distinguishes "still fetching" from "fetched, and there are genuinely zero eligible
+  // assignees" - the dropdown needs to tell those two states apart instead of looking
+  // the same as "nobody has been chosen yet".
+  const [usersLoaded, setUsersLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
     userService
-      .listAgents()
+      .listAssignableUsers()
       .then((list) => {
-        if (!cancelled) setAgents(list);
+        if (!cancelled) setAssignableUsers(list);
       })
       .catch(() => {
-        // Non-fatal: if the agent list can't be loaded, the "Assign to" field just stays
-        // empty and the ticket is created unassigned - never silently auto-picked.
+        // Non-fatal: if the assignee list can't be loaded, the "Assign to" field just
+        // stays empty and the ticket is created unassigned - never silently auto-picked.
       })
       .finally(() => {
-        if (!cancelled) setAgentsLoaded(true);
+        if (!cancelled) setUsersLoaded(true);
       });
     return () => {
       cancelled = true;
@@ -123,14 +126,14 @@ export function NewTicketPage() {
           <Select
             label="Assign to"
             placeholder={
-              agentsLoaded && agents.length === 0 ? 'No assignees are available' : 'Unassigned'
+              usersLoaded && assignableUsers.length === 0 ? 'No assignees are available' : 'Unassigned'
             }
-            options={agents.map((a) => ({ value: a.id, label: `${a.name} (${a.email})` }))}
+            options={assignableUsers.map((u) => ({ value: u.id, label: `${u.name} - ${roleLabel(u.role)}` }))}
             value={assignedAgent}
             onChange={(e) => setAssignedAgent(e.target.value)}
             hint={
-              agentsLoaded && agents.length === 0
-                ? 'No agent accounts exist yet, so there is nothing to assign to. An admin can add one from Admin > Users, then reassign this ticket afterward.'
+              usersLoaded && assignableUsers.length === 0
+                ? 'No eligible accounts exist yet, so there is nothing to assign to. An admin can add one from Admin > Users, then reassign this ticket afterward.'
                 : 'Optional - leave blank to leave it unassigned. An agent or admin can pick it up or assign it later.'
             }
           />

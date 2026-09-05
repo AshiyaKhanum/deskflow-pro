@@ -7,13 +7,18 @@ import { assertValidTransition } from './stateMachine';
 import { parsePagination, buildPaginationMeta, PaginationMeta } from '../utils/pagination';
 import { TicketPriority, TicketCategory, TicketStatus, Role, SlaStatus } from '../types/enums';
 
+// A ticket may be handed to an active agent OR an active customer (an explicit business
+// rule - not every support tool works this way, but this one does). Admins are
+// deliberately excluded: they administer the system rather than carry ticket workload.
+const ASSIGNABLE_ROLES: Role[] = ['agent', 'customer'];
+
 export interface CreateTicketInput {
   title: string;
   description: string;
   category: TicketCategory;
   priority: TicketPriority;
   customerId: string;
-  /** Optional: the requester's chosen agent, picked from the real list of active agents. */
+  /** Optional: the requester's chosen assignee, picked from the real list of active agents/customers. */
   assignedAgent?: string | null;
 }
 
@@ -26,11 +31,15 @@ export async function createTicket(input: CreateTicketInput): Promise<ITicket> {
   // (an admin or agent can assign it later from the ticket detail page).
   let assignedAgent: Types.ObjectId | null = null;
   if (input.assignedAgent) {
-    // Never trust a client-supplied id blindly - it must resolve to a real, active agent,
-    // otherwise a caller could "assign" a ticket to a customer id or a made-up id.
-    const agent = await User.findOne({ _id: input.assignedAgent, role: 'agent', isActive: true }).select('_id');
-    if (!agent) throw ApiError.badRequest('assignedAgent must reference an active agent');
-    assignedAgent = agent._id;
+    // Never trust a client-supplied id blindly - it must resolve to a real, active,
+    // eligible user, otherwise a caller could "assign" a ticket to an admin or a made-up id.
+    const assignee = await User.findOne({
+      _id: input.assignedAgent,
+      role: { $in: ASSIGNABLE_ROLES },
+      isActive: true,
+    }).select('_id');
+    if (!assignee) throw ApiError.badRequest('assignedAgent must reference an active, eligible user');
+    assignedAgent = assignee._id;
   }
 
   const ticket = await Ticket.create({
@@ -87,7 +96,10 @@ export interface ListTicketsResult {
  */
 async function baseScopeFilter(requesterId: string, requesterRole: Role) {
   if (requesterRole === 'customer') {
-    return { customer: new Types.ObjectId(requesterId) };
+    // A customer sees tickets they filed, plus any ticket they've been made the
+    // assignee of (customers are an eligible assignee role - see ASSIGNABLE_ROLES).
+    const id = new Types.ObjectId(requesterId);
+    return { $or: [{ customer: id }, { assignedAgent: id }] };
   }
   if (requesterRole === 'agent') {
     // Agents see tickets assigned to them, plus the unassigned queue.
@@ -151,7 +163,7 @@ export async function listTickets(params: ListTicketsParams): Promise<ListTicket
 
   const query = Ticket.find(filter)
     .populate('customer', 'name email')
-    .populate('assignedAgent', 'name email');
+    .populate('assignedAgent', 'name email role');
 
   // slaStatus is a derived field, so it can't be filtered in the DB query directly;
   // apply it as a post-filter on the (already paginated-by-everything-else) page.
@@ -160,7 +172,7 @@ export async function listTickets(params: ListTicketsParams): Promise<ListTicket
   if (params.slaStatus) {
     const all = await Ticket.find(filter)
       .populate('customer', 'name email')
-      .populate('assignedAgent', 'name email')
+      .populate('assignedAgent', 'name email role')
       .sort({ [sortField]: sortOrder })
       .lean();
     const filtered = all.filter(
@@ -194,19 +206,27 @@ export async function getTicketById(
 ): Promise<ITicket> {
   const ticket = await Ticket.findById(ticketId)
     .populate('customer', 'name email')
-    .populate('assignedAgent', 'name email');
+    .populate('assignedAgent', 'name email role');
   if (!ticket) throw ApiError.notFound('Ticket not found');
 
   assertCanViewTicket(ticket, requesterId, requesterRole);
   return ticket;
 }
 
-/** Server-side ownership check - a customer must never load another customer's ticket by guessing an id. */
+/**
+ * Server-side ownership check - a customer must never load another customer's ticket
+ * by guessing an id. A customer CAN view a ticket that isn't theirs if they are its
+ * assignee (customers are an eligible assignee role - see ASSIGNABLE_ROLES), since
+ * being handed a ticket to work is meaningless without being able to see it.
+ */
 export function assertCanViewTicket(ticket: ITicket, requesterId: string, requesterRole: Role): void {
   if (requesterRole === 'admin') return;
   if (requesterRole === 'agent') return; // agents can view any ticket (assigned or in the unassigned queue)
   if (requesterRole === 'customer') {
-    if (String(ticket.customer._id ?? ticket.customer) !== requesterId) {
+    const isOwner = String(ticket.customer._id ?? ticket.customer) === requesterId;
+    const isAssignee =
+      !!ticket.assignedAgent && String((ticket.assignedAgent as { _id?: unknown })._id ?? ticket.assignedAgent) === requesterId;
+    if (!isOwner && !isAssignee) {
       throw ApiError.notFound('Ticket not found');
     }
     return;
@@ -275,16 +295,22 @@ export async function updateTicket(
       });
       ticket.assignedAgent = null;
     } else {
-      const agent = await User.findOne({ _id: input.assignedAgent, role: 'agent' });
-      if (!agent) throw ApiError.badRequest('assignedAgent must reference an existing agent');
+      // Same eligibility rule as ticket creation - an active agent or an active
+      // customer, never an admin and never a stale/deactivated account.
+      const assignee = await User.findOne({
+        _id: input.assignedAgent,
+        role: { $in: ASSIGNABLE_ROLES },
+        isActive: true,
+      });
+      if (!assignee) throw ApiError.badRequest('assignedAgent must reference an active, eligible user');
       historyEntries.push({
         field: 'assignedAgent',
         from: ticket.assignedAgent ? String(ticket.assignedAgent) : undefined,
-        to: String(agent._id),
+        to: String(assignee._id),
         changedBy: new Types.ObjectId(requesterId),
         changedAt: new Date(),
       });
-      ticket.assignedAgent = agent._id;
+      ticket.assignedAgent = assignee._id;
     }
   }
 

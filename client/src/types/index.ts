@@ -41,6 +41,7 @@ export interface TicketRef {
   _id: string;
   name: string;
   email: string;
+  role?: Role;
 }
 
 export interface TicketHistoryEntry {
