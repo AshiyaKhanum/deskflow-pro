@@ -256,6 +256,20 @@ textarea {
   gap: var(--space-3);
   padding: var(--space-2);
 }
+.user-chip-button {
+  width: 100%;
+  border: none;
+  background: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+}
+.user-chip-button:hover,
+.user-chip-button:focus-visible {
+  background: var(--color-surface-alt, rgba(0, 0, 0, 0.04));
+}
 .user-avatar {
   width: 36px;
   height: 36px;

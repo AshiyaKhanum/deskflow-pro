@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { UserDetailModal } from '../components/UserDetailModal';
 import { initials } from '../utils/format';
 
 const NAV_ITEMS: Array<{ to: string; label: string; roles: Array<'customer' | 'agent' | 'admin'>; icon: string }> = [
@@ -14,6 +15,7 @@ const NAV_ITEMS: Array<{ to: string; label: string; roles: Array<'customer' | 'a
 export function AppLayout() {
   const { user, logout } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [showMyAccount, setShowMyAccount] = useState(false);
 
   if (!user) return null;
   const visibleItems = NAV_ITEMS.filter((item) => item.roles.includes(user.role));
@@ -58,7 +60,12 @@ export function AppLayout() {
         </nav>
 
         <div className="sidebar-footer">
-          <div className="user-chip">
+          <button
+            type="button"
+            className="user-chip user-chip-button"
+            onClick={() => setShowMyAccount(true)}
+            aria-haspopup="dialog"
+          >
             <span className="user-avatar" style={{ background: user.avatarColor }} aria-hidden="true">
               {initials(user.name)}
             </span>
@@ -66,7 +73,7 @@ export function AppLayout() {
               <div className="user-name">{user.name}</div>
               <div className="user-role">{user.role}</div>
             </div>
-          </div>
+          </button>
           <button className="btn btn-ghost btn-block btn-sm" onClick={logout} style={{ marginTop: 8 }}>
             Log out
           </button>
@@ -94,6 +101,8 @@ export function AppLayout() {
           <Outlet />
         </main>
       </div>
+
+      {showMyAccount && <UserDetailModal user={user} onClose={() => setShowMyAccount(false)} />}
     </div>
   );
 }

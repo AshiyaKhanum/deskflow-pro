@@ -11,28 +11,35 @@ import { User } from '../types';
  * Fetches and shows one user's real account details, by id, from the database -
  * every time it opens. Never renders a cached/static copy: closing and reopening
  * for a different id always triggers a fresh GET /api/users/:id.
+ *
+ * Pass `user` instead of `userId` to show an already-known account (e.g. "view my
+ * own account" from the sidebar) without a fetch - GET /api/users/:id is admin-only,
+ * so a customer/agent viewing their own details never has that lookup available, but
+ * they already have their own live record from /auth/me via useAuth().
  */
 export function UserDetailModal({
   userId,
+  user: providedUser,
   onClose,
 }: {
-  userId: string | null;
+  userId?: string | null;
+  user?: User | null;
   onClose: () => void;
 }) {
-  const [user, setUser] = useState<User | null>(null);
+  const [fetchedUser, setFetchedUser] = useState<User | null>(null);
   const [error, setError] = useState<NormalizedApiError | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
-    if (!userId) return;
+    if (providedUser || !userId) return;
     let cancelled = false;
-    setUser(null);
+    setFetchedUser(null);
     setError(null);
     setIsLoading(true);
     userService
       .getUser(userId)
       .then((result) => {
-        if (!cancelled) setUser(result);
+        if (!cancelled) setFetchedUser(result);
       })
       .catch((err) => {
         if (!cancelled) setError(normalizeError(err));
@@ -43,10 +50,13 @@ export function UserDetailModal({
     return () => {
       cancelled = true;
     };
-  }, [userId]);
+  }, [userId, providedUser]);
+
+  const user = providedUser ?? fetchedUser;
+  const isOpen = !!providedUser || !!userId;
 
   return (
-    <Modal isOpen={!!userId} onClose={onClose} title="Account details">
+    <Modal isOpen={isOpen} onClose={onClose} title="Account details">
       {isLoading && <LoadingState label="Loading account…" />}
       {!isLoading && error && <ErrorState message={error.message} />}
       {!isLoading && !error && user && (

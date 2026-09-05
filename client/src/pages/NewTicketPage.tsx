@@ -126,7 +126,7 @@ export function NewTicketPage() {
           <Select
             label="Assign to"
             placeholder={
-              usersLoaded && assignableUsers.length === 0 ? 'No assignees are available' : 'Unassigned'
+              usersLoaded && assignableUsers.length === 0 ? 'No assignees are available' : 'Please select'
             }
             options={assignableUsers.map((u) => ({ value: u.id, label: `${u.name} - ${roleLabel(u.role)}` }))}
             value={assignedAgent}
