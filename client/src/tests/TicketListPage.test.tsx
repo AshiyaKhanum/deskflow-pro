@@ -32,7 +32,16 @@ const mockTicket: Ticket = {
   updatedAt: new Date().toISOString(),
 };
 
-function renderPage() {
+function renderPage(role: 'customer' | 'agent' | 'admin' = 'customer') {
+  vi.mocked(useAuth).mockReturnValue({
+    user: { id: 'c1', name: 'Sam Rivera', email: 'sam@example.com', role, avatarColor: '#000', isActive: true, createdAt: '' },
+    isAuthenticated: true,
+    isLoading: false,
+    login: vi.fn(),
+    register: vi.fn(),
+    logout: vi.fn(),
+  });
+
   return render(
     <MemoryRouter>
       <TicketListPage />
@@ -43,13 +52,9 @@ function renderPage() {
 describe('TicketListPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(useAuth).mockReturnValue({
-      user: { id: 'c1', name: 'Sam Rivera', email: 'sam@example.com', role: 'customer', avatarColor: '#000', isActive: true, createdAt: '' },
-      isAuthenticated: true,
-      isLoading: false,
-      login: vi.fn(),
-      register: vi.fn(),
-      logout: vi.fn(),
+    vi.mocked(ticketService.listTickets).mockResolvedValue({
+      tickets: [],
+      pagination: { page: 1, limit: 10, total: 0, totalPages: 1 },
     });
   });
 
@@ -95,5 +100,23 @@ describe('TicketListPage', () => {
     await waitFor(() => expect(screen.getByText(/cannot log in/i)).toBeInTheDocument());
     const results = await axe(container);
     expect(results).toHaveNoViolations();
+  });
+
+  it('shows the "+ New Ticket" shortcut for a customer', async () => {
+    renderPage('customer');
+    await waitFor(() => expect(screen.getByText('Tickets')).toBeInTheDocument());
+    expect(screen.getByRole('link', { name: /\+ new ticket/i })).toBeInTheDocument();
+  });
+
+  it('shows the "+ New Ticket" shortcut for an agent, who can now file tickets too', async () => {
+    renderPage('agent');
+    await waitFor(() => expect(screen.getByText('Tickets')).toBeInTheDocument());
+    expect(screen.getByRole('link', { name: /\+ new ticket/i })).toBeInTheDocument();
+  });
+
+  it('hides the "+ New Ticket" shortcut for an admin, who cannot file tickets', async () => {
+    renderPage('admin');
+    await waitFor(() => expect(screen.getByText('Tickets')).toBeInTheDocument());
+    expect(screen.queryByRole('link', { name: /\+ new ticket/i })).not.toBeInTheDocument();
   });
 });
