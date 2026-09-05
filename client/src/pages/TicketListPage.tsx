@@ -77,10 +77,10 @@ export function TicketListPage() {
         <div>
           <h1>Tickets</h1>
           <p className="page-subtitle">
-            {user?.role === 'customer' ? 'Your support tickets' : 'Tickets across the support queue'}
+            {user?.role === 'customer' || 'agent'? 'Your support tickets' : 'Tickets across the support queue'}
           </p>
         </div>
-        {user?.role === 'customer' && (
+        {user?.role === 'customer' || 'agent' && (
           <Link to="/tickets/new">
             <Button>+ New Ticket</Button>
           </Link>
