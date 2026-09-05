@@ -1,0 +1,22 @@
+MpngoDB
+ashiyaiotreeminds_db_user
+ohaYCdrIZoEy8wwq
+
+mongodb+srv://ashiyaiotreeminds_db_user:ohaYCdrIZoEy8wwq@deskflow-cluster.rmtnjfs.mongodb.net/?appName=deskflow-cluster
+
+
+Live Link:
+https://deskflow-pro-client.onrender.com/
+
+Api link:
+https://deskflow-pro-api.onrender.com/
+
+
+
+Creditionals
+
+All password: DeskflowDemo123!
+
+agent@deskflow.demo - Agent
+customer@deskflow.demo - Customer
+admin@deskflow.demo - Admin - All data is there
