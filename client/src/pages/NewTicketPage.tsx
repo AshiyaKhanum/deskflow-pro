@@ -7,7 +7,13 @@ import { Select } from '../components/ui/Select';
 import { Textarea } from '../components/ui/Textarea';
 import { Button } from '../components/ui/Button';
 import { normalizeError } from '../api/client';
-import { TICKET_CATEGORIES, TICKET_PRIORITIES, TicketCategory, TicketPriority, User } from '../types';
+import {
+  TICKET_CATEGORIES,
+  TICKET_PRIORITIES,
+  TicketCategory,
+  TicketPriority,
+  User,
+} from '../types';
 import { useToast } from '../context/ToastContext';
 
 export function NewTicketPage() {
@@ -19,6 +25,10 @@ export function NewTicketPage() {
   const [priority, setPriority] = useState<TicketPriority>('medium');
   const [assignedAgent, setAssignedAgent] = useState('');
   const [agents, setAgents] = useState<User[]>([]);
+  // Distinguishes "still fetching" from "fetched, and there are genuinely zero active
+  // agents" - the dropdown needs to tell those two states apart instead of looking the
+  // same as "nobody has been chosen yet".
+  const [agentsLoaded, setAgentsLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -32,6 +42,9 @@ export function NewTicketPage() {
       .catch(() => {
         // Non-fatal: if the agent list can't be loaded, the "Assign to" field just stays
         // empty and the ticket is created unassigned - never silently auto-picked.
+      })
+      .finally(() => {
+        if (!cancelled) setAgentsLoaded(true);
       });
     return () => {
       cancelled = true;
@@ -65,7 +78,8 @@ export function NewTicketPage() {
         <div>
           <h1>New Ticket</h1>
           <p className="page-subtitle">
-            Tell us what&apos;s going on. We&apos;ll automatically calculate the SLA deadline based on priority.
+            Tell us what&apos;s going on. We&apos;ll automatically calculate the SLA deadline based
+            on priority.
           </p>
         </div>
       </div>
@@ -108,11 +122,17 @@ export function NewTicketPage() {
           </div>
           <Select
             label="Assign to"
-            placeholder="Unassigned"
+            placeholder={
+              agentsLoaded && agents.length === 0 ? 'No assignees are available' : 'Unassigned'
+            }
             options={agents.map((a) => ({ value: a.id, label: `${a.name} (${a.email})` }))}
             value={assignedAgent}
             onChange={(e) => setAssignedAgent(e.target.value)}
-            hint="Optional - leave blank to leave it unassigned. An agent or admin can pick it up or assign it later."
+            hint={
+              agentsLoaded && agents.length === 0
+                ? 'No agent accounts exist yet, so there is nothing to assign to. An admin can add one from Admin > Users, then reassign this ticket afterward.'
+                : 'Optional - leave blank to leave it unassigned. An agent or admin can pick it up or assign it later.'
+            }
           />
           {error && (
             <p className="form-error" role="alert" style={{ marginBottom: 16 }}>

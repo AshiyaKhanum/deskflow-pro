@@ -119,7 +119,9 @@ export function TicketDetailPage() {
         <div>
           <div className="card card-padded" style={{ marginBottom: 20 }}>
             <h2 style={{ fontSize: '1rem' }}>Description</h2>
-            <p style={{ whiteSpace: 'pre-wrap', color: 'var(--color-text)' }}>{ticket.description}</p>
+            <p style={{ whiteSpace: 'pre-wrap', color: 'var(--color-text)' }}>
+              {ticket.description}
+            </p>
           </div>
 
           <div className="card card-padded">
@@ -131,26 +133,39 @@ export function TicketDetailPage() {
             {!commentsLoading && comments && comments.length > 0 && (
               <ol className="timeline" style={{ listStyle: 'none', padding: 0 }}>
                 {comments.map((comment) => (
-                  <li key={comment._id} className={`timeline-item ${comment.visibility === 'internal' ? 'internal' : ''}`}>
+                  <li
+                    key={comment._id}
+                    className={`timeline-item ${comment.visibility === 'internal' ? 'internal' : ''}`}
+                  >
                     <div className="timeline-item-head">
                       <span className="timeline-author">
                         <span
                           className="user-avatar"
-                          style={{ background: comment.author.avatarColor, width: 24, height: 24, fontSize: '0.65rem' }}
+                          style={{
+                            background: comment.author.avatarColor,
+                            width: 24,
+                            height: 24,
+                            fontSize: '0.65rem',
+                          }}
                           aria-hidden="true"
                         >
                           {initials(comment.author.name)}
                         </span>
                         {comment.author.name}
                         {comment.visibility === 'internal' && (
-                          <span className="badge badge-warning" aria-label="Internal note, not visible to the customer">
+                          <span
+                            className="badge badge-warning"
+                            aria-label="Internal note, not visible to the customer"
+                          >
                             Internal note
                           </span>
                         )}
                       </span>
                       <span className="timeline-time">{formatDateTime(comment.createdAt)}</span>
                     </div>
-                    <p style={{ margin: 0, whiteSpace: 'pre-wrap', color: 'var(--color-text)' }}>{comment.body}</p>
+                    <p style={{ margin: 0, whiteSpace: 'pre-wrap', color: 'var(--color-text)' }}>
+                      {comment.body}
+                    </p>
                   </li>
                 ))}
               </ol>
@@ -165,7 +180,15 @@ export function TicketDetailPage() {
                 placeholder="Type your update…"
                 required
               />
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  flexWrap: 'wrap',
+                  gap: 12,
+                }}
+              >
                 {isAgentOrAdmin ? (
                   <fieldset style={{ border: 'none', padding: 0, margin: 0 }}>
                     <legend className="visually-hidden">Comment visibility</legend>
@@ -191,7 +214,9 @@ export function TicketDetailPage() {
                     </label>
                   </fieldset>
                 ) : (
-                  <span className="form-hint">Support agents may also leave internal notes you won&apos;t see.</span>
+                  <span className="form-hint">
+                    Support agents may also leave internal notes you won&apos;t see.
+                  </span>
                 )}
                 <Button type="submit" isLoading={isPostingComment} size="sm">
                   Post
@@ -268,11 +293,19 @@ export function TicketDetailPage() {
               <Select
                 label="Assigned agent"
                 hideLabel
-                placeholder="Unassigned"
+                placeholder={
+                  agents && agents.length === 0 ? 'No assignees are available' : 'Unassigned'
+                }
                 options={(agents ?? []).map((a) => ({ value: a.id, label: a.name }))}
                 value={ticket.assignedAgent?._id ?? ''}
                 onChange={(e) => handleAssign(e.target.value)}
               />
+              {agents && agents.length === 0 && (
+                <span className="form-hint">
+                  No agent accounts exist yet - add one from Admin &gt; Users to be able to assign
+                  this ticket.
+                </span>
+              )}
             </div>
           )}
         </div>

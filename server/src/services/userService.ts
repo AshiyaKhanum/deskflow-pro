@@ -75,3 +75,10 @@ export async function updateUser(userId: string, input: UpdateUserInput, request
 export async function listActiveAgents() {
   return User.find({ role: 'agent', isActive: true }).select('_id name email').sort({ name: 1 });
 }
+
+/** Used by the "click a name to see the account" views - always a live lookup, never a static/cached copy. */
+export async function getUserById(userId: string) {
+  const user = await User.findById(userId);
+  if (!user) throw ApiError.notFound('User not found');
+  return user;
+}

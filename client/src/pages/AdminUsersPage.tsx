@@ -13,6 +13,7 @@ import { useToast } from '../context/ToastContext';
 import { useAuth } from '../context/AuthContext';
 import { normalizeError } from '../api/client';
 import { Role } from '../types';
+import { UserDetailModal } from '../components/UserDetailModal';
 
 export function AdminUsersPage() {
   const { user: currentUser } = useAuth();
@@ -22,9 +23,16 @@ export function AdminUsersPage() {
   const [roleFilter, setRoleFilter] = useState<Role | ''>('');
   const debouncedSearch = useDebounce(searchInput, 350);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
 
   const { data, isLoading, error, refetch } = useQuery(
-    () => userService.listUsers({ page, limit: 10, search: debouncedSearch || undefined, role: roleFilter || undefined }),
+    () =>
+      userService.listUsers({
+        page,
+        limit: 10,
+        search: debouncedSearch || undefined,
+        role: roleFilter || undefined,
+      }),
     [page, debouncedSearch, roleFilter],
   );
 
@@ -112,7 +120,15 @@ export function AdminUsersPage() {
               <tbody>
                 {data.users.map((u) => (
                   <tr key={u.id}>
-                    <td>{u.name}</td>
+                    <td>
+                      <button
+                        type="button"
+                        className="link-button"
+                        onClick={() => setSelectedUserId(u.id)}
+                      >
+                        {u.name}
+                      </button>
+                    </td>
                     <td>{u.email}</td>
                     <td>
                       <Select
@@ -129,7 +145,9 @@ export function AdminUsersPage() {
                       />
                     </td>
                     <td>
-                      <Badge variant={u.isActive ? 'success' : 'danger'}>{u.isActive ? 'Active' : 'Deactivated'}</Badge>
+                      <Badge variant={u.isActive ? 'success' : 'danger'}>
+                        {u.isActive ? 'Active' : 'Deactivated'}
+                      </Badge>
                     </td>
                     <td>
                       <Button
@@ -150,7 +168,12 @@ export function AdminUsersPage() {
         </>
       )}
 
-      <CreateUserModal isOpen={isCreateOpen} onClose={() => setIsCreateOpen(false)} onCreated={refetch} />
+      <CreateUserModal
+        isOpen={isCreateOpen}
+        onClose={() => setIsCreateOpen(false)}
+        onCreated={refetch}
+      />
+      <UserDetailModal userId={selectedUserId} onClose={() => setSelectedUserId(null)} />
     </div>
   );
 }
@@ -196,7 +219,13 @@ function CreateUserModal({
     <Modal isOpen={isOpen} onClose={onClose} title="Create user">
       <form onSubmit={handleSubmit} noValidate>
         <Input label="Full name" required value={name} onChange={(e) => setName(e.target.value)} />
-        <Input label="Email address" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
+        <Input
+          label="Email address"
+          type="email"
+          required
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+        />
         <Input
           label="Temporary password"
           type="password"

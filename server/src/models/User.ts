@@ -55,5 +55,8 @@ const userSchema = new Schema<IUser>(
 
 // email's unique index is already declared via `unique: true` on the field above.
 userSchema.index({ role: 1 });
+// Backs the ticket-list "search by customer name" query (ticketService.listTickets),
+// which otherwise falls back to a full collection scan as the user base grows.
+userSchema.index({ name: 1 });
 
 export const User = model<IUser>('User', userSchema);

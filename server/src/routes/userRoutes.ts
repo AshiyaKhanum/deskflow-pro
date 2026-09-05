@@ -15,6 +15,11 @@ router.get('/agents', userController.listAgents);
 
 router.get('/', authorize('admin'), validate(listUsersQuerySchema, 'query'), userController.listUsers);
 router.post('/', authorize('admin'), validate(createUserSchema), userController.createUser);
+// Single-user lookup backs the "click a name to see the account" views (Dashboard's agent
+// workload, Admin > Users). Admin-only, same as the full user list - it can return any
+// user's email address, which customers/agents have no business seeing for anyone but
+// themselves via /auth/me.
+router.get('/:id', authorize('admin'), userController.getUser);
 router.patch('/:id', authorize('admin'), validate(updateUserSchema), userController.updateUser);
 
 export default router;

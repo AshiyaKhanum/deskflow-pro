@@ -24,7 +24,18 @@ export async function listAgents(): Promise<User[]> {
   return res.data.data;
 }
 
-export async function createUser(input: { name: string; email: string; password: string; role: Role }): Promise<User> {
+/** Always a fresh, live lookup by id - used by "click a name to see the account" views. */
+export async function getUser(id: string): Promise<User> {
+  const res = await apiClient.get<ApiResponse<User>>(`/users/${id}`);
+  return res.data.data;
+}
+
+export async function createUser(input: {
+  name: string;
+  email: string;
+  password: string;
+  role: Role;
+}): Promise<User> {
   const res = await apiClient.post<ApiResponse<User>>('/users', input);
   return res.data.data;
 }
