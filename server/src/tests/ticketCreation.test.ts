@@ -32,8 +32,10 @@ describe('Ticket creation - optional "assign to" agent', () => {
     expect(getRes.status).toBe(200);
   });
 
-  it('falls back to auto-assignment when no agent is requested', async () => {
+  it('leaves the ticket unassigned when no agent is requested - never auto-picks one', async () => {
     const { token: customerToken } = await registerAndLogin('customer');
+    // Even with an active agent in the system, the ticket must NOT be auto-assigned
+    // to them (there is no more "least busy agent" fallback).
     await createUserDirect('agent', { email: 'auto-agent@example.com' });
 
     const createRes = await request(app)
@@ -47,7 +49,7 @@ describe('Ticket creation - optional "assign to" agent', () => {
       });
 
     expect(createRes.status).toBe(201);
-    expect(createRes.body.data.assignedAgent).not.toBeNull();
+    expect(createRes.body.data.assignedAgent).toBeNull();
   });
 
   it('rejects a request that names a non-agent (or non-existent) user as the assignee', async () => {

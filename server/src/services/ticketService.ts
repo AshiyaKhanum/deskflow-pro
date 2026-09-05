@@ -4,7 +4,6 @@ import { User } from '../models/User';
 import { ApiError } from '../utils/ApiError';
 import { calculateSlaForNewTicket, computeSlaStatus } from './slaService';
 import { assertValidTransition } from './stateMachine';
-import { pickAgentForAssignment } from './assignmentService';
 import { parsePagination, buildPaginationMeta, PaginationMeta } from '../utils/pagination';
 import { TicketPriority, TicketCategory, TicketStatus, Role, SlaStatus } from '../types/enums';
 
@@ -14,7 +13,7 @@ export interface CreateTicketInput {
   category: TicketCategory;
   priority: TicketPriority;
   customerId: string;
-  /** Optional: requester's preferred agent. Must reference an existing, active agent. */
+  /** Optional: the requester's chosen agent, picked from the real list of active agents. */
   assignedAgent?: string | null;
 }
 
@@ -22,15 +21,16 @@ export async function createTicket(input: CreateTicketInput): Promise<ITicket> {
   const now = new Date();
   const { slaPolicySnapshot, slaDueAt } = await calculateSlaForNewTicket(input.priority, now);
 
-  let assignedAgent: Types.ObjectId | null;
+  // Assignment is whatever the requester explicitly chose - never an automatic
+  // "least busy agent" pick. Leaving the field blank leaves the ticket unassigned
+  // (an admin or agent can assign it later from the ticket detail page).
+  let assignedAgent: Types.ObjectId | null = null;
   if (input.assignedAgent) {
     // Never trust a client-supplied id blindly - it must resolve to a real, active agent,
     // otherwise a caller could "assign" a ticket to a customer id or a made-up id.
     const agent = await User.findOne({ _id: input.assignedAgent, role: 'agent', isActive: true }).select('_id');
     if (!agent) throw ApiError.badRequest('assignedAgent must reference an active agent');
     assignedAgent = agent._id;
-  } else {
-    assignedAgent = await pickAgentForAssignment();
   }
 
   const ticket = await Ticket.create({

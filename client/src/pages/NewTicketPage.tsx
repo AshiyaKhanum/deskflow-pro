@@ -30,7 +30,8 @@ export function NewTicketPage() {
         if (!cancelled) setAgents(list);
       })
       .catch(() => {
-        // Non-fatal: the "Assign to" field just falls back to auto-assignment if this fails.
+        // Non-fatal: if the agent list can't be loaded, the "Assign to" field just stays
+        // empty and the ticket is created unassigned - never silently auto-picked.
       });
     return () => {
       cancelled = true;
@@ -107,11 +108,11 @@ export function NewTicketPage() {
           </div>
           <Select
             label="Assign to"
-            placeholder="Auto-assign to the least-busy agent"
+            placeholder="Unassigned"
             options={agents.map((a) => ({ value: a.id, label: `${a.name} (${a.email})` }))}
             value={assignedAgent}
             onChange={(e) => setAssignedAgent(e.target.value)}
-            hint="Optional - leave blank to let us route it automatically."
+            hint="Optional - leave blank to leave it unassigned. An agent or admin can pick it up or assign it later."
           />
           {error && (
             <p className="form-error" role="alert" style={{ marginBottom: 16 }}>
