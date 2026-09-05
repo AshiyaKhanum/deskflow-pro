@@ -8,8 +8,10 @@ const router = Router();
 
 router.use(authenticate());
 
-// Any authenticated agent/admin needs the active-agent list to build assignment dropdowns.
-router.get('/agents', authorize('agent', 'admin'), userController.listAgents);
+// Any authenticated user needs the active-agent list to build assignment dropdowns -
+// agents/admins for reassignment, customers to optionally request a specific agent when
+// filing a new ticket. This only exposes name/email of active agents, nothing sensitive.
+router.get('/agents', userController.listAgents);
 
 router.get('/', authorize('admin'), validate(listUsersQuerySchema, 'query'), userController.listUsers);
 router.post('/', authorize('admin'), validate(createUserSchema), userController.createUser);

@@ -10,6 +10,9 @@ export const createTicketSchema = z.object({
   description: z.string().trim().min(10, 'Description must be at least 10 characters').max(10000),
   category: z.enum(TICKET_CATEGORIES).default('general'),
   priority: z.enum(TICKET_PRIORITIES).default('medium'),
+  // Optional: the customer may request a specific agent. If omitted, the backend
+  // falls back to picking the least-loaded active agent automatically.
+  assignedAgent: z.string().trim().min(1).nullable().optional(),
 });
 
 export const updateTicketSchema = z

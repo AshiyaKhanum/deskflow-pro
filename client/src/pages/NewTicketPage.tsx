@@ -1,12 +1,13 @@
-import { FormEvent, useState } from 'react';
+import { FormEvent, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import * as ticketService from '../services/ticketService';
+import * as userService from '../services/userService';
 import { Input } from '../components/ui/Input';
 import { Select } from '../components/ui/Select';
 import { Textarea } from '../components/ui/Textarea';
 import { Button } from '../components/ui/Button';
 import { normalizeError } from '../api/client';
-import { TICKET_CATEGORIES, TICKET_PRIORITIES, TicketCategory, TicketPriority } from '../types';
+import { TICKET_CATEGORIES, TICKET_PRIORITIES, TicketCategory, TicketPriority, User } from '../types';
 import { useToast } from '../context/ToastContext';
 
 export function NewTicketPage() {
@@ -16,15 +17,38 @@ export function NewTicketPage() {
   const [description, setDescription] = useState('');
   const [category, setCategory] = useState<TicketCategory>('general');
   const [priority, setPriority] = useState<TicketPriority>('medium');
+  const [assignedAgent, setAssignedAgent] = useState('');
+  const [agents, setAgents] = useState<User[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    userService
+      .listAgents()
+      .then((list) => {
+        if (!cancelled) setAgents(list);
+      })
+      .catch(() => {
+        // Non-fatal: the "Assign to" field just falls back to auto-assignment if this fails.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
     setIsSubmitting(true);
     try {
-      const ticket = await ticketService.createTicket({ title, description, category, priority });
+      const ticket = await ticketService.createTicket({
+        title,
+        description,
+        category,
+        priority,
+        assignedAgent: assignedAgent || undefined,
+      });
       showToast(`Ticket #${ticket.ticketNumber} created`, 'success');
       navigate(`/tickets/${ticket._id}`);
     } catch (err) {
@@ -81,6 +105,14 @@ export function NewTicketPage() {
               hint="Urgent = 4h SLA, High = 24h, Medium = 48h, Low = 72h (default policy)"
             />
           </div>
+          <Select
+            label="Assign to"
+            placeholder="Auto-assign to the least-busy agent"
+            options={agents.map((a) => ({ value: a.id, label: `${a.name} (${a.email})` }))}
+            value={assignedAgent}
+            onChange={(e) => setAssignedAgent(e.target.value)}
+            hint="Optional - leave blank to let us route it automatically."
+          />
           {error && (
             <p className="form-error" role="alert" style={{ marginBottom: 16 }}>
               {error}

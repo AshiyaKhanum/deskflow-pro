@@ -14,12 +14,24 @@ export interface CreateTicketInput {
   category: TicketCategory;
   priority: TicketPriority;
   customerId: string;
+  /** Optional: requester's preferred agent. Must reference an existing, active agent. */
+  assignedAgent?: string | null;
 }
 
 export async function createTicket(input: CreateTicketInput): Promise<ITicket> {
   const now = new Date();
   const { slaPolicySnapshot, slaDueAt } = await calculateSlaForNewTicket(input.priority, now);
-  const assignedAgent = await pickAgentForAssignment();
+
+  let assignedAgent: Types.ObjectId | null;
+  if (input.assignedAgent) {
+    // Never trust a client-supplied id blindly - it must resolve to a real, active agent,
+    // otherwise a caller could "assign" a ticket to a customer id or a made-up id.
+    const agent = await User.findOne({ _id: input.assignedAgent, role: 'agent', isActive: true }).select('_id');
+    if (!agent) throw ApiError.badRequest('assignedAgent must reference an active agent');
+    assignedAgent = agent._id;
+  } else {
+    assignedAgent = await pickAgentForAssignment();
+  }
 
   const ticket = await Ticket.create({
     title: input.title,

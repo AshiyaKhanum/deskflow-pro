@@ -20,7 +20,12 @@ export const createTicket = asyncHandler(async (req: Request, res: Response) => 
   if (req.user.role !== 'customer') {
     throw ApiError.forbidden('Only customers can create tickets');
   }
-  const ticket = await ticketService.createTicket({ ...req.body, customerId: req.user.id });
+  const { assignedAgent, ...rest } = req.body;
+  const ticket = await ticketService.createTicket({
+    ...rest,
+    customerId: req.user.id,
+    assignedAgent: assignedAgent ?? undefined,
+  });
   res.status(201).json({ success: true, data: serializeTicket(ticket) });
 });
 

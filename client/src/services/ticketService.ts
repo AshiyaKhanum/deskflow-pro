@@ -31,6 +31,7 @@ export async function createTicket(input: {
   description: string;
   category: TicketCategory;
   priority: TicketPriority;
+  assignedAgent?: string | null;
 }): Promise<Ticket> {
   const res = await apiClient.post<ApiResponse<Ticket>>('/tickets', input);
   return res.data.data;
