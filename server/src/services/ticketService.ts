@@ -5,12 +5,7 @@ import { ApiError } from '../utils/ApiError';
 import { calculateSlaForNewTicket, computeSlaStatus } from './slaService';
 import { assertValidTransition } from './stateMachine';
 import { parsePagination, buildPaginationMeta, PaginationMeta } from '../utils/pagination';
-import { TicketPriority, TicketCategory, TicketStatus, Role, SlaStatus } from '../types/enums';
-
-// A ticket may be handed to an active agent OR an active customer (an explicit business
-// rule - not every support tool works this way, but this one does). Admins are
-// deliberately excluded: they administer the system rather than carry ticket workload.
-const ASSIGNABLE_ROLES: Role[] = ['agent', 'customer'];
+import { TicketPriority, TicketCategory, TicketStatus, Role, SlaStatus, ASSIGNABLE_ROLES } from '../types/enums';
 
 export interface CreateTicketInput {
   title: string;
@@ -31,8 +26,9 @@ export async function createTicket(input: CreateTicketInput): Promise<ITicket> {
   // (an admin or agent can assign it later from the ticket detail page).
   let assignedAgent: Types.ObjectId | null = null;
   if (input.assignedAgent) {
-    // Never trust a client-supplied id blindly - it must resolve to a real, active,
-    // eligible user, otherwise a caller could "assign" a ticket to an admin or a made-up id.
+    // Never trust a client-supplied id blindly - it must resolve to a real, active
+    // user, otherwise a caller could "assign" a ticket to a deactivated account or a
+    // made-up id. Every role (admin/agent/customer) is an eligible assignee.
     const assignee = await User.findOne({
       _id: input.assignedAgent,
       role: { $in: ASSIGNABLE_ROLES },
@@ -102,10 +98,17 @@ async function baseScopeFilter(requesterId: string, requesterRole: Role) {
     return { $or: [{ customer: id }, { assignedAgent: id }] };
   }
   if (requesterRole === 'agent') {
-    // Agents see tickets assigned to them, plus the unassigned queue.
-    return { $or: [{ assignedAgent: new Types.ObjectId(requesterId) }, { assignedAgent: null }] };
+    // Agents see tickets assigned to them, plus any ticket they filed themselves
+    // (agents can't currently create tickets, so the second clause is a no-op today,
+    // but it keeps this in sync with the same "assigned to me OR created by me" rule
+    // customers get, and costs nothing if that ever changes). Agents no longer see
+    // the general unassigned queue - only admins can (re)assign a ticket, so an agent
+    // seeing tickets they have no way to act on was just noise, and unrelated tickets
+    // should not be visible to them at all.
+    const id = new Types.ObjectId(requesterId);
+    return { $or: [{ assignedAgent: id }, { customer: id }] };
   }
-  // admin: no restriction
+  // admin: no restriction - admins manage the complete support operation.
   return {};
 }
 
@@ -214,14 +217,23 @@ export async function getTicketById(
 }
 
 /**
- * Server-side ownership check - a customer must never load another customer's ticket
- * by guessing an id. A customer CAN view a ticket that isn't theirs if they are its
- * assignee (customers are an eligible assignee role - see ASSIGNABLE_ROLES), since
- * being handed a ticket to work is meaningless without being able to see it.
+ * Server-side ownership check - a customer or agent must never load a ticket outside
+ * their scope just by guessing/typing its id. This is the same "assigned to me OR
+ * created by me" rule baseScopeFilter applies to listings, re-checked per-ticket so
+ * the API is the real enforcement boundary (not just what the React UI hides) - see
+ * DESKFLOW's "role-based ticket visibility must be enforced by the backend" rule.
  */
 export function assertCanViewTicket(ticket: ITicket, requesterId: string, requesterRole: Role): void {
-  if (requesterRole === 'admin') return;
-  if (requesterRole === 'agent') return; // agents can view any ticket (assigned or in the unassigned queue)
+  if (requesterRole === 'admin') return; // admins manage the complete support operation
+  if (requesterRole === 'agent') {
+    const isAssignee =
+      !!ticket.assignedAgent && String((ticket.assignedAgent as { _id?: unknown })._id ?? ticket.assignedAgent) === requesterId;
+    const isCreator = String(ticket.customer._id ?? ticket.customer) === requesterId;
+    if (!isAssignee && !isCreator) {
+      throw ApiError.notFound('Ticket not found');
+    }
+    return;
+  }
   if (requesterRole === 'customer') {
     const isOwner = String(ticket.customer._id ?? ticket.customer) === requesterId;
     const isAssignee =
@@ -295,8 +307,8 @@ export async function updateTicket(
       });
       ticket.assignedAgent = null;
     } else {
-      // Same eligibility rule as ticket creation - an active agent or an active
-      // customer, never an admin and never a stale/deactivated account.
+      // Same eligibility rule as ticket creation - any active user (admin, agent, or
+      // customer), never a stale/deactivated account.
       const assignee = await User.findOne({
         _id: input.assignedAgent,
         role: { $in: ASSIGNABLE_ROLES },

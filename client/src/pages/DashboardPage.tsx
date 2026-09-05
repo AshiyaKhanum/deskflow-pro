@@ -1,12 +1,23 @@
 import { useState } from 'react';
 import { useQuery } from '../hooks/useQuery';
 import * as dashboardService from '../services/dashboardService';
-import { ErrorState, LoadingState, EmptyState } from '../components/ui/States';
+import * as ticketService from '../services/ticketService';
+import * as userService from '../services/userService';
+import { ErrorState, LoadingState, EmptyState, TableSkeleton } from '../components/ui/States';
 import { BarList } from '../components/BarList';
 import { StatusBadge, PriorityBadge } from '../components/TicketBadges';
 import { UserDetailModal } from '../components/UserDetailModal';
+import { Select } from '../components/ui/Select';
 import { Link } from 'react-router-dom';
-import { formatDateTime } from '../utils/format';
+import { formatDateTime, roleLabel } from '../utils/format';
+import { Role } from '../types';
+
+/** "Name - Role" for an assignee, or "Unassigned" - never a bare "Unassigned"/undefined
+ * mixup when a real assignee exists, and never just an id. */
+function assigneeLabel(assignee: { name: string; role?: Role } | null): string {
+  if (!assignee) return 'Unassigned';
+  return assignee.role ? `${assignee.name} - ${roleLabel(assignee.role)}` : assignee.name;
+}
 
 export function DashboardPage() {
   const { data, isLoading, error, refetch } = useQuery(
@@ -14,6 +25,16 @@ export function DashboardPage() {
     [],
   );
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
+  const [filterAssigneeId, setFilterAssigneeId] = useState('');
+
+  const { data: assignableUsers } = useQuery(() => userService.listAssignableUsers(), []);
+  const { data: filteredTickets, isLoading: filteredLoading } = useQuery(
+    () =>
+      filterAssigneeId
+        ? ticketService.listTickets({ assignedAgent: filterAssigneeId, limit: 25, sortBy: 'updatedAt', sortOrder: 'desc' })
+        : Promise.resolve(null),
+    [filterAssigneeId],
+  );
 
   if (isLoading) return <LoadingState label="Crunching the numbers…" />;
   if (error || !data) return <ErrorState message={error?.message} onRetry={refetch} />;
@@ -197,12 +218,76 @@ export function DashboardPage() {
                       <StatusBadge status={ticket.status} />
                       <PriorityBadge priority={ticket.priority} />
                       <span style={{ fontSize: '0.75rem', color: 'var(--color-text-faint)' }}>
+                        {assigneeLabel(ticket.assignedAgent)}
+                      </span>
+                      <span style={{ fontSize: '0.75rem', color: 'var(--color-text-faint)' }}>
                         {formatDateTime(ticket.updatedAt)}
                       </span>
                     </div>
                   </li>
                 ))}
               </ul>
+            )}
+          </div>
+
+          <div className="card card-padded">
+            <h2 style={{ fontSize: '1rem' }}>Tickets by assignee</h2>
+            <Select
+              label="Filter by assignee"
+              hideLabel
+              placeholder="All"
+              options={(assignableUsers ?? []).map((u) => ({ value: u.id, label: `${u.name} - ${roleLabel(u.role)}` }))}
+              value={filterAssigneeId}
+              onChange={(e) => setFilterAssigneeId(e.target.value)}
+              hint="Shows every user from the database - Admin, Agent, and Customer alike - since any of them can be a ticket's assignee."
+            />
+
+            {!filterAssigneeId && (
+              <p style={{ color: 'var(--color-text-faint)', fontSize: '0.875rem', marginTop: 8 }}>
+                Choose someone above to see the tickets assigned to them.
+              </p>
+            )}
+
+            {filterAssigneeId && filteredLoading && <TableSkeleton columns={4} />}
+
+            {filterAssigneeId && !filteredLoading && filteredTickets && filteredTickets.tickets.length === 0 && (
+              <EmptyState
+                title="No tickets assigned to this person yet"
+                message="Assign them a ticket from a ticket's detail page to see it show up here."
+              />
+            )}
+
+            {filterAssigneeId && !filteredLoading && filteredTickets && filteredTickets.tickets.length > 0 && (
+              <div className="table-wrapper">
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th scope="col">Ticket</th>
+                      <th scope="col">Status</th>
+                      <th scope="col">Priority</th>
+                      <th scope="col">Updated</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredTickets.tickets.map((ticket) => (
+                      <tr key={ticket._id}>
+                        <td>
+                          <Link to={`/tickets/${ticket._id}`}>
+                            #{ticket.ticketNumber} {ticket.title}
+                          </Link>
+                        </td>
+                        <td>
+                          <StatusBadge status={ticket.status} />
+                        </td>
+                        <td>
+                          <PriorityBadge priority={ticket.priority} />
+                        </td>
+                        <td>{formatDateTime(ticket.updatedAt)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             )}
           </div>
         </div>

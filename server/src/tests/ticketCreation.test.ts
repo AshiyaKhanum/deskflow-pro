@@ -80,19 +80,48 @@ describe('Ticket creation - optional "assign to" agent', () => {
     expect(getRes.status).toBe(200);
   });
 
-  it('rejects a request that names an admin (or non-existent user) as the assignee', async () => {
+  it('lets a customer request an active admin as the assignee (admins are also an eligible assignee role)', async () => {
     const { token: customerToken } = await registerAndLogin('customer');
-    const admin = await createUserDirect('admin', { email: 'not-eligible-admin@example.com' });
+    const admin = await createUserDirect('admin', { email: 'assignee-admin@example.com' });
+
+    const createRes = await request(app)
+      .post('/api/tickets')
+      .set('Authorization', `Bearer ${customerToken}`)
+      .send({
+        title: 'Escalating directly to an admin',
+        description: 'Admins are an explicitly eligible assignee role in this app.',
+        priority: 'low',
+        category: 'general',
+        assignedAgent: String(admin._id),
+      });
+
+    expect(createRes.status).toBe(201);
+    expect(createRes.body.data.assignedAgent._id ?? createRes.body.data.assignedAgent).toBe(String(admin._id));
+
+    // Admins can already see every ticket regardless of assignment - confirm access still works.
+    const adminToken = await loginAs('assignee-admin@example.com');
+    const getRes = await request(app)
+      .get(`/api/tickets/${createRes.body.data._id}`)
+      .set('Authorization', `Bearer ${adminToken}`);
+    expect(getRes.status).toBe(200);
+  });
+
+  it('rejects a request that names a deactivated user, even though their role is otherwise eligible', async () => {
+    const { token: customerToken } = await registerAndLogin('customer');
+    const inactiveAgent = await createUserDirect('agent', {
+      email: 'inactive-agent@example.com',
+      isActive: false,
+    });
 
     const res = await request(app)
       .post('/api/tickets')
       .set('Authorization', `Bearer ${customerToken}`)
       .send({
-        title: 'Trying to assign an admin, who is not an eligible assignee role',
-        description: 'Admins administer the system rather than carry ticket workload.',
+        title: 'Assigning to a deactivated agent',
+        description: 'Deactivated accounts must never be assignable, regardless of role.',
         priority: 'low',
         category: 'general',
-        assignedAgent: String(admin._id),
+        assignedAgent: String(inactiveAgent._id),
       });
 
     expect(res.status).toBe(400);

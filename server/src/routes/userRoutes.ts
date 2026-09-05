@@ -13,8 +13,9 @@ router.use(authenticate());
 // filing a new ticket. This only exposes name/email of active agents, nothing sensitive.
 router.get('/agents', userController.listAgents);
 
-// The full assignee dropdown (agents AND customers, per the "assign to any eligible
-// user" business rule) - same authenticated-any-role reach as /agents above.
+// The full assignee dropdown/filter (admins, agents, AND customers, per the "assign
+// to any eligible user" business rule) - same authenticated-any-role reach as /agents
+// above.
 router.get('/assignable', userController.listAssignableUsers);
 
 router.get('/', authorize('admin'), validate(listUsersQuerySchema, 'query'), userController.listUsers);

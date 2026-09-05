@@ -1,6 +1,15 @@
 export const ROLES = ['customer', 'agent', 'admin'] as const;
 export type Role = (typeof ROLES)[number];
 
+/**
+ * Roles eligible to be a ticket's assignee. Currently every role - an admin, an
+ * agent, or a customer can all be handed a ticket to work (business rule, not
+ * every support tool works this way). Shared by ticketService (assignment
+ * validation) and userService (the assignee dropdown/filter's user list) so the
+ * two can never drift out of sync.
+ */
+export const ASSIGNABLE_ROLES: readonly Role[] = ROLES;
+
 export const TICKET_STATUSES = [
   'open',
   'in_progress',

@@ -10,8 +10,8 @@ export const createTicketSchema = z.object({
   description: z.string().trim().min(10, 'Description must be at least 10 characters').max(10000),
   category: z.enum(TICKET_CATEGORIES).default('general'),
   priority: z.enum(TICKET_PRIORITIES).default('medium'),
-  // Optional: the customer may request a specific active agent or customer as the
-  // assignee (see ASSIGNABLE_ROLES in ticketService). If omitted, the ticket is left
+  // Optional: the customer may request any specific active user (admin, agent, or
+  // customer) as the assignee (see ASSIGNABLE_ROLES in types/enums). If omitted, the ticket is left
   // unassigned - there is no automatic "least busy agent" fallback.
   assignedAgent: z.string().trim().min(1).nullable().optional(),
 });

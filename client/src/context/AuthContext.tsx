@@ -7,8 +7,10 @@ interface AuthContextValue {
   user: User | null;
   isLoading: boolean;
   isAuthenticated: boolean;
-  login: (email: string, password: string) => Promise<void>;
-  register: (name: string, email: string, password: string) => Promise<void>;
+  // Returns the freshly-logged-in user so callers (e.g. LoginPage) can make a
+  // role-aware routing decision immediately, without waiting on a re-render.
+  login: (email: string, password: string) => Promise<User>;
+  register: (name: string, email: string, password: string) => Promise<User>;
   logout: () => void;
 }
 
@@ -46,12 +48,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const result = await authService.login(email, password);
     localStorage.setItem(TOKEN_STORAGE_KEY, result.token);
     setUser(result.user);
+    return result.user;
   }, []);
 
   const register = useCallback(async (name: string, email: string, password: string) => {
     const result = await authService.register(name, email, password);
     localStorage.setItem(TOKEN_STORAGE_KEY, result.token);
     setUser(result.user);
+    return result.user;
   }, []);
 
   const logout = useCallback(() => {

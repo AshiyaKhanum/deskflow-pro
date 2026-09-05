@@ -19,9 +19,19 @@ export function LoginPage() {
     setError(null);
     setIsSubmitting(true);
     try {
-      await login(email, password);
+      const loggedInUser = await login(email, password);
       const from = (location.state as { from?: Location })?.from;
-      navigate(from ? (from as unknown as string) : '/tickets', { replace: true });
+      // Only honor a saved "come back here" location if it's actually reachable for
+      // this account's role - otherwise a stale deep link (e.g. from a previous
+      // session, or a bookmarked admin page) would bounce a freshly-logged-in user
+      // straight to /403, which looks exactly like "login is broken." With nothing
+      // to return to, land each role somewhere that's always theirs to see: Admins
+      // go to their Dashboard, everyone else goes to the ticket list.
+      const fromPath = from?.pathname;
+      const fromIsAdminOnly = !!fromPath && /^\/(dashboard|admin\/)/.test(fromPath);
+      const canReturnTo = fromPath && (!fromIsAdminOnly || loggedInUser.role === 'admin');
+      const destination = canReturnTo ? (from as unknown as string) : loggedInUser.role === 'admin' ? '/dashboard' : '/tickets';
+      navigate(destination, { replace: true });
     } catch (err) {
       setError(normalizeError(err).message);
     } finally {

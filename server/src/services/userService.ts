@@ -2,7 +2,7 @@ import bcrypt from 'bcryptjs';
 import { User } from '../models/User';
 import { ApiError } from '../utils/ApiError';
 import { parsePagination, buildPaginationMeta, PaginationMeta } from '../utils/pagination';
-import { Role } from '../types/enums';
+import { Role, ASSIGNABLE_ROLES } from '../types/enums';
 import { env } from '../config/env';
 
 export interface ListUsersParams {
@@ -77,13 +77,14 @@ export async function listActiveAgents() {
 }
 
 /**
- * Eligible ticket assignees: active agents AND active customers (per the explicit
- * business rule that a ticket may be handed to either) - admins are deliberately
- * excluded, they manage the system rather than carry a ticket workload. Includes
- * `role` so callers can label each option (e.g. "Rahul - Agent").
+ * Eligible ticket assignees: every active user, regardless of role (admin, agent, or
+ * customer - per the explicit business rule that a ticket may be handed to any of
+ * them). Used to build both the assignee dropdown (ticket creation/reassignment) and
+ * the Dashboard's "filter by assignee" list. Includes `role` so callers can label
+ * each option (e.g. "Rahul - Agent", "John - Admin").
  */
 export async function listAssignableUsers() {
-  return User.find({ role: { $in: ['agent', 'customer'] }, isActive: true })
+  return User.find({ role: { $in: ASSIGNABLE_ROLES }, isActive: true })
     .select('_id name email role')
     .sort({ role: 1, name: 1 });
 }

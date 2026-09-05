@@ -19,13 +19,17 @@ export async function seedSlaPolicies() {
   );
 }
 
-export async function createUserDirect(role: Role, overrides: Partial<{ name: string; email: string }> = {}) {
+export async function createUserDirect(
+  role: Role,
+  overrides: Partial<{ name: string; email: string; isActive: boolean }> = {},
+) {
   const passwordHash = await bcrypt.hash('Password123!', 4);
   const user = await User.create({
     name: overrides.name ?? `${role} user`,
     email: overrides.email ?? `${role}-${Date.now()}-${Math.random().toString(36).slice(2)}@example.com`,
     passwordHash,
     role,
+    ...(overrides.isActive !== undefined ? { isActive: overrides.isActive } : {}),
   });
   return user;
 }
