@@ -59,6 +59,9 @@ export interface Ticket {
   title: string;
   description: string;
   customer: TicketRef;
+  /** Who actually filed the ticket - same person as `customer` unless an agent filed
+   * it on the customer's behalf. Absent/null on tickets created before this existed. */
+  createdBy?: TicketRef | null;
   assignedAgent: TicketRef | null;
   priority: TicketPriority;
   status: TicketStatus;

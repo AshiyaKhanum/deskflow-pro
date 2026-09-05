@@ -16,7 +16,7 @@ const router = Router();
 router.use(authenticate());
 
 router.get('/', validate(listTicketsQuerySchema, 'query'), ticketController.listTickets);
-router.post('/', authorize('customer'), validate(createTicketSchema), ticketController.createTicket);
+router.post('/', authorize('customer', 'agent'), validate(createTicketSchema), ticketController.createTicket);
 
 router.get('/:id', ticketController.getTicket);
 router.patch('/:id', authorize('agent', 'admin'), validate(updateTicketSchema), ticketController.updateTicket);

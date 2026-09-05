@@ -32,6 +32,8 @@ export async function createTicket(input: {
   category: TicketCategory;
   priority: TicketPriority;
   assignedAgent?: string | null;
+  /** Required when an agent (not a customer) is filing this ticket - see NewTicketPage. */
+  customerId?: string;
 }): Promise<Ticket> {
   const res = await apiClient.post<ApiResponse<Ticket>>('/tickets', input);
   return res.data.data;

@@ -73,7 +73,7 @@ export function AppRoutes() {
           <Route
             path="/tickets/new"
             element={
-              <ProtectedRoute allowedRoles={['customer']}>
+              <ProtectedRoute allowedRoles={['customer', 'agent']}>
                 <NewTicketPage />
               </ProtectedRoute>
             }

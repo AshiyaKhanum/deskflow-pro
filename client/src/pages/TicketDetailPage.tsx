@@ -110,6 +110,9 @@ export function TicketDetailPage() {
           </h1>
           <p className="page-subtitle">
             Opened by {ticket.customer?.name} ({ticket.customer?.email})
+            {ticket.createdBy && ticket.createdBy._id !== ticket.customer?._id && (
+              <> · Filed by {ticket.createdBy.name}{ticket.createdBy.role ? ` - ${roleLabel(ticket.createdBy.role)}` : ''}</>
+            )}
           </p>
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>

@@ -23,6 +23,7 @@ export interface ITicket extends Document {
   title: string;
   description: string;
   customer: Types.ObjectId;
+  createdBy: Types.ObjectId | null;
   assignedAgent: Types.ObjectId | null;
   priority: TicketPriority;
   status: TicketStatus;
@@ -77,6 +78,20 @@ const ticketSchema = new Schema<ITicket>(
       type: Schema.Types.ObjectId,
       ref: 'User',
       required: true,
+      index: true,
+    },
+    // Who actually performed the create action - the customer themselves when they
+    // file their own ticket (same value as `customer`), or the agent when an agent
+    // files a ticket on a customer's behalf (see ticketService.createTicket). Kept
+    // separate from `customer` (who the ticket is ABOUT/owned by) so an agent who
+    // files a ticket for someone else can still find it under "tickets I created",
+    // even if they never assign it to themselves. Not `required` at the schema level
+    // so existing tickets from before this field existed keep saving/updating fine;
+    // every ticket created going forward always has it set.
+    createdBy: {
+      type: Schema.Types.ObjectId,
+      ref: 'User',
+      default: null,
       index: true,
     },
     assignedAgent: {

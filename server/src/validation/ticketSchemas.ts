@@ -14,6 +14,10 @@ export const createTicketSchema = z.object({
   // customer) as the assignee (see ASSIGNABLE_ROLES in types/enums). If omitted, the ticket is left
   // unassigned - there is no automatic "least busy agent" fallback.
   assignedAgent: z.string().trim().min(1).nullable().optional(),
+  // Required only when an agent is filing this ticket (enforced in the controller,
+  // since that depends on the requester's role, not on the shape of the body alone) -
+  // the active customer this ticket is being filed on behalf of.
+  customerId: z.string().trim().min(1).optional(),
 });
 
 export const updateTicketSchema = z

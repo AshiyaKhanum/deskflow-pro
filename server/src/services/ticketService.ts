@@ -12,14 +12,30 @@ export interface CreateTicketInput {
   description: string;
   category: TicketCategory;
   priority: TicketPriority;
+  /** Who the ticket is ABOUT / owned by. A customer filing their own ticket names
+   * themselves; an agent filing on someone's behalf names the chosen customer. */
   customerId: string;
-  /** Optional: the requester's chosen assignee, picked from the real list of active agents/customers. */
+  /** Who actually performed the create action (the authenticated requester) - see
+   * `createdBy` on the Ticket model for why this is tracked separately from customerId. */
+  filedById: string;
+  filedByRole: Role;
+  /** Optional: the requester's chosen assignee, picked from the real list of active users. */
   assignedAgent?: string | null;
 }
 
 export async function createTicket(input: CreateTicketInput): Promise<ITicket> {
   const now = new Date();
   const { slaPolicySnapshot, slaDueAt } = await calculateSlaForNewTicket(input.priority, now);
+
+  let customerId = input.customerId;
+  if (input.filedByRole === 'agent') {
+    // An agent files a ticket ON BEHALF OF a customer they name explicitly - never
+    // trust that client-supplied id blindly, it must resolve to a real, active
+    // customer account (never another agent/admin masquerading as the ticket owner).
+    const customer = await User.findOne({ _id: input.customerId, role: 'customer', isActive: true }).select('_id');
+    if (!customer) throw ApiError.badRequest('customerId must reference an active customer account');
+    customerId = String(customer._id);
+  }
 
   // Assignment is whatever the requester explicitly chose - never an automatic
   // "least busy agent" pick. Leaving the field blank leaves the ticket unassigned
@@ -43,7 +59,8 @@ export async function createTicket(input: CreateTicketInput): Promise<ITicket> {
     description: input.description,
     category: input.category,
     priority: input.priority,
-    customer: input.customerId,
+    customer: customerId,
+    createdBy: input.filedById,
     status: 'open',
     assignedAgent,
     slaPolicySnapshot,
@@ -52,9 +69,9 @@ export async function createTicket(input: CreateTicketInput): Promise<ITicket> {
       {
         field: 'status',
         to: 'open',
-        changedBy: input.customerId,
+        changedBy: input.filedById,
         changedAt: now,
-        note: 'Ticket created',
+        note: input.filedByRole === 'agent' ? "Ticket created by an agent on the customer's behalf" : 'Ticket created',
       },
     ],
   });
@@ -98,15 +115,14 @@ async function baseScopeFilter(requesterId: string, requesterRole: Role) {
     return { $or: [{ customer: id }, { assignedAgent: id }] };
   }
   if (requesterRole === 'agent') {
-    // Agents see tickets assigned to them, plus any ticket they filed themselves
-    // (agents can't currently create tickets, so the second clause is a no-op today,
-    // but it keeps this in sync with the same "assigned to me OR created by me" rule
-    // customers get, and costs nothing if that ever changes). Agents no longer see
+    // Agents see tickets assigned to them, plus any ticket they filed themselves on a
+    // customer's behalf (createdBy - see the Ticket model; distinct from `customer`,
+    // which names who the ticket is ABOUT, not who typed it up). Agents no longer see
     // the general unassigned queue - only admins can (re)assign a ticket, so an agent
     // seeing tickets they have no way to act on was just noise, and unrelated tickets
     // should not be visible to them at all.
     const id = new Types.ObjectId(requesterId);
-    return { $or: [{ assignedAgent: id }, { customer: id }] };
+    return { $or: [{ assignedAgent: id }, { createdBy: id }] };
   }
   // admin: no restriction - admins manage the complete support operation.
   return {};
@@ -166,6 +182,7 @@ export async function listTickets(params: ListTicketsParams): Promise<ListTicket
 
   const query = Ticket.find(filter)
     .populate('customer', 'name email')
+    .populate('createdBy', 'name email role')
     .populate('assignedAgent', 'name email role');
 
   // slaStatus is a derived field, so it can't be filtered in the DB query directly;
@@ -175,6 +192,7 @@ export async function listTickets(params: ListTicketsParams): Promise<ListTicket
   if (params.slaStatus) {
     const all = await Ticket.find(filter)
       .populate('customer', 'name email')
+      .populate('createdBy', 'name email role')
       .populate('assignedAgent', 'name email role')
       .sort({ [sortField]: sortOrder })
       .lean();
@@ -209,6 +227,7 @@ export async function getTicketById(
 ): Promise<ITicket> {
   const ticket = await Ticket.findById(ticketId)
     .populate('customer', 'name email')
+    .populate('createdBy', 'name email role')
     .populate('assignedAgent', 'name email role');
   if (!ticket) throw ApiError.notFound('Ticket not found');
 
@@ -228,7 +247,8 @@ export function assertCanViewTicket(ticket: ITicket, requesterId: string, reques
   if (requesterRole === 'agent') {
     const isAssignee =
       !!ticket.assignedAgent && String((ticket.assignedAgent as { _id?: unknown })._id ?? ticket.assignedAgent) === requesterId;
-    const isCreator = String(ticket.customer._id ?? ticket.customer) === requesterId;
+    const isCreator =
+      !!ticket.createdBy && String((ticket.createdBy as { _id?: unknown })._id ?? ticket.createdBy) === requesterId;
     if (!isAssignee && !isCreator) {
       throw ApiError.notFound('Ticket not found');
     }

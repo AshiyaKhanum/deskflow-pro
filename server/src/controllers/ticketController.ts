@@ -17,13 +17,23 @@ function serializeTicket(ticket: ITicket) {
 
 export const createTicket = asyncHandler(async (req: Request, res: Response) => {
   if (!req.user) throw ApiError.unauthorized();
-  if (req.user.role !== 'customer') {
-    throw ApiError.forbidden('Only customers can create tickets');
+  if (req.user.role !== 'customer' && req.user.role !== 'agent') {
+    throw ApiError.forbidden('Only customers and agents can create tickets');
   }
-  const { assignedAgent, ...rest } = req.body;
+  const { assignedAgent, customerId, ...rest } = req.body;
+
+  // A customer always files for themselves. An agent files ON BEHALF OF a customer
+  // they must explicitly choose (never inferred/hard-coded) - ticketService
+  // independently re-validates that id resolves to a real, active customer account.
+  if (req.user.role === 'agent' && !customerId) {
+    throw ApiError.badRequest("customerId is required when an agent files a ticket on a customer's behalf");
+  }
+
   const ticket = await ticketService.createTicket({
     ...rest,
-    customerId: req.user.id,
+    customerId: req.user.role === 'customer' ? req.user.id : customerId,
+    filedById: req.user.id,
+    filedByRole: req.user.role,
     assignedAgent: assignedAgent ?? undefined,
   });
   res.status(201).json({ success: true, data: serializeTicket(ticket) });

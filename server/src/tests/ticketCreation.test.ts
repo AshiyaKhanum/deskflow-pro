@@ -144,3 +144,96 @@ describe('Ticket creation - optional "assign to" agent', () => {
     expect(res.status).toBe(400);
   });
 });
+
+describe("Ticket creation - agents filing on a customer's behalf", () => {
+  beforeEach(async () => {
+    await seedSlaPolicies();
+  });
+
+  it('lets an agent create a ticket for an explicitly chosen customer, and the agent can then see it', async () => {
+    const agent = await createUserDirect('agent', { name: 'Sanu', email: 'sanu-files@example.com' });
+    const agentToken = await loginAs('sanu-files@example.com');
+    const customer = await createUserDirect('customer', { email: 'called-in@example.com' });
+
+    const createRes = await request(app)
+      .post('/api/tickets')
+      .set('Authorization', `Bearer ${agentToken}`)
+      .send({
+        title: 'Customer called in about a billing issue',
+        description: 'Filed by the agent while on the phone with the customer.',
+        priority: 'medium',
+        category: 'billing',
+        customerId: String(customer._id),
+      });
+
+    expect(createRes.status).toBe(201);
+    expect(createRes.body.data.customer._id ?? createRes.body.data.customer).toBe(String(customer._id));
+    expect(createRes.body.data.createdBy._id ?? createRes.body.data.createdBy).toBe(String(agent._id));
+
+    // The filing agent must be able to find their own work afterward, even though
+    // they aren't the ticket's assignee and aren't its customer/owner.
+    const getRes = await request(app)
+      .get(`/api/tickets/${createRes.body.data._id}`)
+      .set('Authorization', `Bearer ${agentToken}`);
+    expect(getRes.status).toBe(200);
+
+    const listRes = await request(app).get('/api/tickets').set('Authorization', `Bearer ${agentToken}`);
+    const ids = listRes.body.data.tickets.map((t: { _id: string }) => t._id);
+    expect(ids).toContain(createRes.body.data._id);
+  });
+
+  it('rejects an agent creating a ticket without naming which customer it is for', async () => {
+    const agentToken = await loginAs((await createUserDirect('agent', { email: 'no-customer-named@example.com' })).email);
+
+    const res = await request(app)
+      .post('/api/tickets')
+      .set('Authorization', `Bearer ${agentToken}`)
+      .send({
+        title: 'Missing a customerId entirely',
+        description: 'An agent must say who this ticket is for.',
+        priority: 'low',
+        category: 'general',
+      });
+
+    expect(res.status).toBe(400);
+  });
+
+  it('rejects an agent naming a customerId that is not an active customer account', async () => {
+    const agentToken = await loginAs((await createUserDirect('agent', { email: 'bad-customer-id@example.com' })).email);
+    const anotherAgent = await createUserDirect('agent', { email: 'not-a-customer@example.com' });
+
+    const res = await request(app)
+      .post('/api/tickets')
+      .set('Authorization', `Bearer ${agentToken}`)
+      .send({
+        title: "Trying to name another agent as the ticket's customer",
+        description: 'customerId must resolve to a real, active customer - never another agent or admin.',
+        priority: 'low',
+        category: 'general',
+        customerId: String(anotherAgent._id),
+      });
+
+    expect(res.status).toBe(400);
+  });
+
+  it("ignores a customer-supplied customerId - a customer can never file a ticket in someone else's name", async () => {
+    const { token: customerToken, user: filer } = await registerAndLogin('customer', {
+      email: 'real-filer@example.com',
+    });
+    const someoneElse = await createUserDirect('customer', { email: 'impersonation-target@example.com' });
+
+    const res = await request(app)
+      .post('/api/tickets')
+      .set('Authorization', `Bearer ${customerToken}`)
+      .send({
+        title: 'Trying to name someone else as the customer',
+        description: 'The customer field must always be the authenticated requester for a customer-filed ticket.',
+        priority: 'low',
+        category: 'general',
+        customerId: String(someoneElse._id),
+      });
+
+    expect(res.status).toBe(201);
+    expect(res.body.data.customer._id ?? res.body.data.customer).toBe(String(filer._id));
+  });
+});

@@ -6,7 +6,7 @@ import { initials } from '../utils/format';
 
 const NAV_ITEMS: Array<{ to: string; label: string; roles: Array<'customer' | 'agent' | 'admin'>; icon: string }> = [
   { to: '/tickets', label: 'Tickets', roles: ['customer', 'agent', 'admin'], icon: '🎫' },
-  { to: '/tickets/new', label: 'New Ticket', roles: ['customer'], icon: '➕' },
+  { to: '/tickets/new', label: 'New Ticket', roles: ['customer', 'agent'], icon: '➕' },
   { to: '/dashboard', label: 'Dashboard', roles: ['admin'], icon: '📊' },
   { to: '/admin/users', label: 'Users', roles: ['admin'], icon: '👥' },
   { to: '/admin/sla', label: 'SLA Policies', roles: ['admin'], icon: '⏱️' },
