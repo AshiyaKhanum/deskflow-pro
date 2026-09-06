@@ -170,4 +170,44 @@ describe('TicketListPage', () => {
       expect(ticketService.updateTicket).toHaveBeenCalledWith('t1', { assignedAgent: 'a2' }),
     );
   });
+
+  it('uses "Please select" as the unassigned placeholder, not "Unassigned"', async () => {
+    vi.mocked(ticketService.listTickets).mockResolvedValue({
+      tickets: [mockTicket],
+      pagination: { page: 1, limit: 10, total: 1, totalPages: 1 },
+    });
+
+    renderPage('agent');
+    const assigneeSelect = await screen.findByLabelText(/assignee for ticket #1001/i);
+    expect(screen.getByRole('option', { name: 'Please select' })).toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: 'Unassigned' })).not.toBeInTheDocument();
+    // The ticket has no assignee, so the placeholder option is the selected one.
+    expect((assigneeSelect as HTMLSelectElement).value).toBe('');
+  });
+
+  it('hides the reassignment dropdown entirely when there is nobody eligible to assign - shows plain text instead', async () => {
+    vi.mocked(ticketService.listTickets).mockResolvedValue({
+      tickets: [{ ...mockTicket, assignedAgent: { _id: 'a1', name: 'Jordan Blake', email: 'jordan@example.com', role: 'agent' } }],
+      pagination: { page: 1, limit: 10, total: 1, totalPages: 1 },
+    });
+    vi.mocked(userService.listAssignableUsers).mockResolvedValue([]);
+
+    renderPage('agent');
+    await waitFor(() => expect(screen.getByText(/jordan blake/i)).toBeInTheDocument());
+    expect(screen.queryByLabelText(/assignee for ticket/i)).not.toBeInTheDocument();
+  });
+
+  it("still shows the ticket's current assignee correctly even if they've since dropped out of the eligible pool", async () => {
+    // e.g. deactivated after being assigned - the dropdown's value must still match a
+    // real option instead of silently looking unassigned.
+    vi.mocked(ticketService.listTickets).mockResolvedValue({
+      tickets: [{ ...mockTicket, assignedAgent: { _id: 'gone', name: 'Former Agent', email: 'former@example.com', role: 'agent' } }],
+      pagination: { page: 1, limit: 10, total: 1, totalPages: 1 },
+    });
+
+    renderPage('agent');
+    const assigneeSelect = await screen.findByLabelText(/assignee for ticket #1001/i);
+    expect((assigneeSelect as HTMLSelectElement).value).toBe('gone');
+    expect(screen.getByRole('option', { name: /former agent.*no longer eligible/i })).toBeInTheDocument();
+  });
 });

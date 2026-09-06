@@ -1,4 +1,4 @@
-import { Role, SlaStatus, TicketPriority, TicketStatus } from '../types';
+import { Role, SlaStatus, TicketPriority, TicketRef, TicketStatus, User } from '../types';
 
 export function formatDateTime(iso: string | null | undefined): string {
   if (!iso) return '—';
@@ -97,6 +97,35 @@ const ROLE_LABELS: Record<Role, string> = {
 /** "agent" -> "Agent" - keeps role display consistent (dropdowns, ticket views, account details). */
 export function roleLabel(role: Role): string {
   return ROLE_LABELS[role] ?? role;
+}
+
+export interface AssigneeOption {
+  value: string;
+  label: string;
+}
+
+/**
+ * Builds the option list for a ticket-assignee <Select>, always including the
+ * ticket's CURRENT assignee even if the live "eligible assignees" list no longer
+ * contains them (e.g. they were deactivated after being assigned, or their role
+ * changed) - otherwise the dropdown's value wouldn't match any of its options,
+ * which silently makes an actually-assigned ticket look unassigned/wrong in the UI.
+ */
+export function assigneeSelectOptions(
+  assignableUsers: User[] | null | undefined,
+  currentAssignee: TicketRef | null | undefined,
+): AssigneeOption[] {
+  const list = assignableUsers ?? [];
+  const options = list.map((u) => ({ value: u.id, label: `${u.name} - ${roleLabel(u.role)}` }));
+  if (currentAssignee && !list.some((u) => u.id === currentAssignee._id)) {
+    options.push({
+      value: currentAssignee._id,
+      label: currentAssignee.role
+        ? `${currentAssignee.name} - ${roleLabel(currentAssignee.role)} (no longer eligible)`
+        : `${currentAssignee.name} (no longer eligible)`,
+    });
+  }
+  return options;
 }
 
 export function initials(name: string): string {

@@ -10,7 +10,7 @@ import { StatusBadge, PriorityBadge, SlaBadge } from '../components/TicketBadges
 import { Select } from '../components/ui/Select';
 import { Textarea } from '../components/ui/Textarea';
 import { Button } from '../components/ui/Button';
-import { formatDateTime, initials, roleLabel } from '../utils/format';
+import { assigneeSelectOptions, formatDateTime, initials, roleLabel } from '../utils/format';
 import { TICKET_TRANSITIONS, TicketStatus } from '../types';
 import { normalizeError } from '../api/client';
 
@@ -45,10 +45,15 @@ export function TicketDetailPage() {
   // assertCanViewTicket + the customer-can-only-reassign check in updateTicket), so this
   // never lets anyone touch a ticket - or a field - outside what they're already
   // allowed to see and change.
-  const { data: assignableUsers } = useQuery(
+  const { data: assignableUsers, isLoading: assignableUsersLoading } = useQuery(
     () => (canReassign ? userService.listAssignableUsers() : Promise.resolve([])),
     [canReassign],
   );
+  // Nobody to hand this ticket to yet - show plain text instead of a dropdown with
+  // nothing meaningful in it (assignableUsers starts out null while loading, which is
+  // also falsy here, so the dropdown only appears once there's really something to
+  // choose from - see the matching hasAssignablePool in TicketListPage.tsx).
+  const hasAssignablePool = (assignableUsers?.length ?? 0) > 0;
 
   const [commentBody, setCommentBody] = useState('');
   const [visibility, setVisibility] = useState<'public' | 'internal'>('public');
@@ -311,26 +316,26 @@ export function TicketDetailPage() {
           {canReassign && (
             <div className="card card-padded">
               <h2 style={{ fontSize: '1rem' }}>Assignment</h2>
-              <Select
-                label="Assignee"
-                hideLabel
-                placeholder={
-                  assignableUsers && assignableUsers.length === 0
-                    ? 'No assignees are available'
-                    : 'Unassigned'
-                }
-                options={(assignableUsers ?? []).map((u) => ({
-                  value: u.id,
-                  label: `${u.name} - ${roleLabel(u.role)}`,
-                }))}
-                value={ticket.assignedAgent?._id ?? ''}
-                onChange={(e) => handleAssign(e.target.value)}
-              />
-              {assignableUsers && assignableUsers.length === 0 && (
-                <span className="form-hint">
-                  No eligible accounts exist yet - add one from Admin &gt; Users to be able to
-                  assign this ticket.
-                </span>
+              {hasAssignablePool ? (
+                <Select
+                  label="Assignee"
+                  hideLabel
+                  placeholder="Please select"
+                  options={assigneeSelectOptions(assignableUsers, ticket.assignedAgent)}
+                  value={ticket.assignedAgent?._id ?? ''}
+                  onChange={(e) => handleAssign(e.target.value)}
+                />
+              ) : (
+                <p style={{ margin: 0 }}>
+                  {ticket.assignedAgent
+                    ? `${ticket.assignedAgent.name}${
+                        ticket.assignedAgent.role ? ` - ${roleLabel(ticket.assignedAgent.role)}` : ''
+                      }`
+                    : 'Unassigned'}
+                </p>
+              )}
+              {!assignableUsersLoading && !hasAssignablePool && (
+                <span className="form-hint">No eligible accounts exist yet to assign this ticket to.</span>
               )}
             </div>
           )}

@@ -154,4 +154,39 @@ describe('TicketDetailPage', () => {
       expect(ticketService.updateTicket).toHaveBeenCalledWith('t1', { assignedAgent: 'a2' }),
     );
   });
+
+  it('uses "Please select" as the unassigned placeholder, not "Unassigned"', async () => {
+    vi.mocked(userService.listAssignableUsers).mockResolvedValue([
+      { id: 'a1', name: 'Jordan Blake', email: 'jordan@example.com', role: 'agent', avatarColor: '#111', isActive: true, createdAt: '' },
+    ]);
+
+    renderPage('agent');
+    await screen.findByLabelText(/^assignee$/i);
+    expect(screen.getByRole('option', { name: 'Please select' })).toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: 'Unassigned' })).not.toBeInTheDocument();
+  });
+
+  it('hides the assignment dropdown and shows plain text when nobody is eligible to assign', async () => {
+    // beforeEach already mocks listAssignableUsers to [] - the case this covers.
+    renderPage('agent');
+    await waitFor(() => expect(screen.getByText(/export produces garbled characters/i)).toBeInTheDocument());
+    expect(screen.queryByLabelText(/^assignee$/i)).not.toBeInTheDocument();
+    // mockTicket.assignedAgent is Jordan Blake - still shown as plain text, not blanked out.
+    expect(screen.getByText(/no eligible accounts exist yet/i)).toBeInTheDocument();
+  });
+
+  it("still shows the ticket's current assignee correctly even if they've since dropped out of the eligible pool", async () => {
+    vi.mocked(ticketService.getTicket).mockResolvedValue({
+      ...mockTicket,
+      assignedAgent: { _id: 'gone', name: 'Former Agent', email: 'former@example.com', role: 'agent' },
+    });
+    vi.mocked(userService.listAssignableUsers).mockResolvedValue([
+      { id: 'a2', name: 'Priya Nair', email: 'priya@example.com', role: 'agent', avatarColor: '#222', isActive: true, createdAt: '' },
+    ]);
+
+    renderPage('agent');
+    const assigneeSelect = await screen.findByLabelText(/^assignee$/i);
+    expect((assigneeSelect as HTMLSelectElement).value).toBe('gone');
+    expect(screen.getByRole('option', { name: /former agent.*no longer eligible/i })).toBeInTheDocument();
+  });
 });

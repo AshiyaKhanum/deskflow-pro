@@ -11,7 +11,7 @@ import { Button } from '../components/ui/Button';
 import { Pagination } from '../components/ui/Pagination';
 import { EmptyState, ErrorState, TableSkeleton } from '../components/ui/States';
 import { StatusBadge, PriorityBadge, SlaBadge } from '../components/TicketBadges';
-import { formatDateTime, roleLabel } from '../utils/format';
+import { assigneeSelectOptions, formatDateTime, roleLabel } from '../utils/format';
 import { TICKET_CATEGORIES, TICKET_PRIORITIES, TICKET_STATUSES, Ticket, TicketListParams } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
@@ -44,6 +44,12 @@ export function TicketListPage() {
     () => (canReassign ? userService.listAssignableUsers() : Promise.resolve([])),
     [canReassign],
   );
+  // Nobody to hand a ticket to (e.g. a brand-new org with no other active accounts
+  // yet) - show plain text instead of a dropdown with nothing meaningful in it. This
+  // also naturally covers the loading moment before assignableUsers has resolved
+  // (starts out null, which is falsy here too), so the dropdown only ever appears
+  // once there's really something to choose from.
+  const hasAssignablePool = (assignableUsers?.length ?? 0) > 0;
   const { params, setParams } = useQueryParams();
   const [searchInput, setSearchInput] = useState(params.search ?? '');
   const debouncedSearch = useDebounce(searchInput, 350);
@@ -247,15 +253,12 @@ export function TicketListPage() {
                       <PriorityBadge priority={ticket.priority} />
                     </td>
                     <td>
-                      {canReassign ? (
+                      {canReassign && hasAssignablePool ? (
                         <Select
                           label={`Assignee for ticket #${ticket.ticketNumber}`}
                           hideLabel
-                          placeholder="Unassigned"
-                          options={(assignableUsers ?? []).map((u) => ({
-                            value: u.id,
-                            label: `${u.name} - ${roleLabel(u.role)}`,
-                          }))}
+                          placeholder="Please select"
+                          options={assigneeSelectOptions(assignableUsers, ticket.assignedAgent)}
                           value={ticket.assignedAgent?._id ?? ''}
                           onChange={(e) => handleAssign(ticket, e.target.value)}
                           style={{ minWidth: 160 }}
