@@ -27,10 +27,21 @@ export function LoginPage() {
       // straight to /403, which looks exactly like "login is broken." With nothing
       // to return to, land each role somewhere that's always theirs to see: Admins
       // go to their Dashboard, everyone else goes to the ticket list.
+      //
+      // Deliberately forward only the PATH, never `from`'s query string: `from` is
+      // captured by ProtectedRoute whenever an unauthenticated request bounces off a
+      // protected page, which can carry whatever filters (?assignedAgent=..., ?status=...)
+      // were on the URL at that moment - often from a completely different account's
+      // session in the same browser tab (e.g. testing customer/agent/admin logins back
+      // to back). Replaying those stale filters against the freshly-logged-in user's own
+      // (correctly scoped) ticket query can easily produce zero rows - "No tickets found"
+      // even though real tickets exist - until the user manually revisits the page with a
+      // clean URL. Landing on the bare path keeps the "return to where you were going"
+      // behavior without carrying someone else's leftover filter state into it.
       const fromPath = from?.pathname;
       const fromIsAdminOnly = !!fromPath && /^\/(dashboard|admin\/)/.test(fromPath);
       const canReturnTo = fromPath && (!fromIsAdminOnly || loggedInUser.role === 'admin');
-      const destination = canReturnTo ? (from as unknown as string) : loggedInUser.role === 'admin' ? '/dashboard' : '/tickets';
+      const destination = canReturnTo ? fromPath : loggedInUser.role === 'admin' ? '/dashboard' : '/tickets';
       navigate(destination, { replace: true });
     } catch (err) {
       setError(normalizeError(err).message);

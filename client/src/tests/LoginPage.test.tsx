@@ -2,20 +2,27 @@ import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { axe } from 'jest-axe';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { LoginPage } from '../pages/LoginPage';
 import { AuthProvider } from '../context/AuthContext';
 import * as authService from '../services/authService';
 
 vi.mock('../services/authService');
 
-function renderLoginPage() {
+/** Renders the search string it landed with, so a test can prove stale filter
+ * query params from a saved `from` location were (or weren't) carried over. */
+function TicketsLanding() {
+  const location = useLocation();
+  return <div>Tickets landing (search: &quot;{location.search}&quot;)</div>;
+}
+
+function renderLoginPage(initialEntries: Array<string | { pathname: string; state?: unknown }> = ['/login']) {
   return render(
-    <MemoryRouter initialEntries={['/login']}>
+    <MemoryRouter initialEntries={initialEntries}>
       <AuthProvider>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
-          <Route path="/tickets" element={<div>Tickets landing</div>} />
+          <Route path="/tickets" element={<TicketsLanding />} />
           <Route path="/dashboard" element={<div>Dashboard landing</div>} />
         </Routes>
       </AuthProvider>
@@ -91,6 +98,30 @@ describe('LoginPage', () => {
     await userEvent.click(screen.getByRole('button', { name: /sign in/i }));
 
     await waitFor(() => expect(screen.getByText(/tickets landing/i)).toBeInTheDocument());
+  });
+
+  it('drops a stale filter query string from a saved "from" location on login - never replays someone else\'s filters', async () => {
+    // Simulates: the browser tab was previously on a filtered /tickets URL (e.g. from a
+    // different account's session, or before the token expired), got bounced to /login
+    // with that full location - including its query string - saved as `from`. A fresh
+    // login must land back on /tickets, but WITHOUT those old filters: replaying an
+    // arbitrary ?assignedAgent=<someone else>&status=... against this user's own scoped
+    // query can produce zero results even when they have real tickets ("No tickets
+    // found" until the user manually revisits the page with a clean URL).
+    vi.mocked(authService.login).mockResolvedValueOnce({ token: 'tok-customer', user: demoUser('customer') });
+
+    renderLoginPage([
+      {
+        pathname: '/login',
+        state: { from: { pathname: '/tickets', search: '?assignedAgent=someone-elses-id&status=resolved' } },
+      },
+    ]);
+    await userEvent.type(screen.getByLabelText(/email address/i), 'customer@deskflow.demo');
+    await userEvent.type(screen.getByLabelText(/password/i), 'DeskflowDemo123!');
+    await userEvent.click(screen.getByRole('button', { name: /sign in/i }));
+
+    await waitFor(() => expect(screen.getByText(/tickets landing/i)).toBeInTheDocument());
+    expect(screen.getByText(/search: ""/)).toBeInTheDocument();
   });
 
   it('has no detectable accessibility violations', async () => {

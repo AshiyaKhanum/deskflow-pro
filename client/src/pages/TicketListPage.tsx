@@ -24,6 +24,10 @@ const SORT_OPTIONS = [
 
 export function TicketListPage() {
   const { user } = useAuth();
+  // Named explicitly (rather than inlined in the JSX below) so this can never be
+  // mis-parenthesized into an operator-precedence bug again - both customers and
+  // agents can file tickets; admins cannot (the server rejects that with 403).
+  const canCreateTicket = user?.role === 'customer' || user?.role === 'agent';
   const { params, setParams } = useQueryParams();
   const [searchInput, setSearchInput] = useState(params.search ?? '');
   const debouncedSearch = useDebounce(searchInput, 350);
@@ -77,10 +81,10 @@ export function TicketListPage() {
         <div>
           <h1>Tickets</h1>
           <p className="page-subtitle">
-            {user?.role === 'customer' || user?.role === 'agent'? 'Your support tickets' : 'Tickets across the support queue'}
+            {user?.role === 'customer' ? 'Your support tickets' : 'Tickets across the support queue'}
           </p>
         </div>
-        {user?.role === 'customer' || user?.role === 'agent' && (
+        {canCreateTicket && (
           <Link to="/tickets/new">
             <Button>+ New Ticket</Button>
           </Link>
