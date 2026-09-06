@@ -19,6 +19,11 @@ export function TicketDetailPage() {
   const { user } = useAuth();
   const { showToast } = useToast();
   const isAgentOrAdmin = user?.role === 'agent' || user?.role === 'admin';
+  // Every role can reassign the ticket they're looking at - see canReassign in
+  // TicketListPage.tsx for the matching list-page control and the full rationale.
+  // isAgentOrAdmin (above) stays scoped to agent/admin-only controls that are unrelated
+  // to assignment: status transitions and internal notes.
+  const canReassign = !!user;
 
   const {
     data: ticket,
@@ -35,11 +40,14 @@ export function TicketDetailPage() {
 
   // The reassignment dropdown offers every eligible assignee (active agents AND active
   // customers - see server/src/services/userService.listAssignableUsers), not just
-  // agents. Only admins can act on it (see the role check around the Select below),
-  // but agents/admins alike need the ticket's current assignee data to render correctly.
+  // agents. Every role can act on it (see canReassign above) - the server independently
+  // scopes what each role can actually do with it (server/src/services/ticketService.ts
+  // assertCanViewTicket + the customer-can-only-reassign check in updateTicket), so this
+  // never lets anyone touch a ticket - or a field - outside what they're already
+  // allowed to see and change.
   const { data: assignableUsers } = useQuery(
-    () => (isAgentOrAdmin ? userService.listAssignableUsers() : Promise.resolve([])),
-    [isAgentOrAdmin],
+    () => (canReassign ? userService.listAssignableUsers() : Promise.resolve([])),
+    [canReassign],
   );
 
   const [commentBody, setCommentBody] = useState('');
@@ -300,7 +308,7 @@ export function TicketDetailPage() {
             </div>
           )}
 
-          {user?.role === 'admin' && (
+          {canReassign && (
             <div className="card card-padded">
               <h2 style={{ fontSize: '1rem' }}>Assignment</h2>
               <Select

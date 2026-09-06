@@ -1,5 +1,6 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { axe } from 'jest-axe';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { TicketDetailPage } from '../pages/TicketDetailPage';
@@ -113,5 +114,44 @@ describe('TicketDetailPage', () => {
     await waitFor(() => expect(screen.getByText(/export produces garbled characters/i)).toBeInTheDocument());
     const results = await axe(container);
     expect(results).toHaveNoViolations();
+  });
+
+  it('lets an agent reassign the ticket to a teammate, not just an admin', async () => {
+    vi.mocked(userService.listAssignableUsers).mockResolvedValue([
+      { id: 'a1', name: 'Jordan Blake', email: 'jordan@example.com', role: 'agent', avatarColor: '#111', isActive: true, createdAt: '' },
+      { id: 'a2', name: 'Priya Nair', email: 'priya@example.com', role: 'agent', avatarColor: '#222', isActive: true, createdAt: '' },
+    ]);
+    vi.mocked(ticketService.updateTicket).mockResolvedValue({
+      ...mockTicket,
+      assignedAgent: { _id: 'a2', name: 'Priya Nair', email: 'priya@example.com' },
+    });
+
+    renderPage('agent');
+    const assigneeSelect = await screen.findByLabelText(/^assignee$/i);
+    expect(assigneeSelect).toBeInTheDocument();
+    await userEvent.selectOptions(assigneeSelect, 'a2');
+
+    await waitFor(() =>
+      expect(ticketService.updateTicket).toHaveBeenCalledWith('t1', { assignedAgent: 'a2' }),
+    );
+  });
+
+  it('also lets a customer reassign their own ticket - the same choice they can make at creation time', async () => {
+    vi.mocked(userService.listAssignableUsers).mockResolvedValue([
+      { id: 'a1', name: 'Jordan Blake', email: 'jordan@example.com', role: 'agent', avatarColor: '#111', isActive: true, createdAt: '' },
+      { id: 'a2', name: 'Priya Nair', email: 'priya@example.com', role: 'agent', avatarColor: '#222', isActive: true, createdAt: '' },
+    ]);
+    vi.mocked(ticketService.updateTicket).mockResolvedValue({
+      ...mockTicket,
+      assignedAgent: { _id: 'a2', name: 'Priya Nair', email: 'priya@example.com' },
+    });
+
+    renderPage('customer');
+    const assigneeSelect = await screen.findByLabelText(/^assignee$/i);
+    await userEvent.selectOptions(assigneeSelect, 'a2');
+
+    await waitFor(() =>
+      expect(ticketService.updateTicket).toHaveBeenCalledWith('t1', { assignedAgent: 'a2' }),
+    );
   });
 });

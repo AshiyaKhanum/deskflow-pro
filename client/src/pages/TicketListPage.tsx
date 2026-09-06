@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '../hooks/useQuery';
 import * as ticketService from '../services/ticketService';
+import * as userService from '../services/userService';
 import { useDebounce } from '../hooks/useDebounce';
 import { useQueryParams } from '../hooks/useQueryParams';
 import { Input } from '../components/ui/Input';
@@ -11,8 +12,10 @@ import { Pagination } from '../components/ui/Pagination';
 import { EmptyState, ErrorState, TableSkeleton } from '../components/ui/States';
 import { StatusBadge, PriorityBadge, SlaBadge } from '../components/TicketBadges';
 import { formatDateTime, roleLabel } from '../utils/format';
-import { TICKET_CATEGORIES, TICKET_PRIORITIES, TICKET_STATUSES, TicketListParams } from '../types';
+import { TICKET_CATEGORIES, TICKET_PRIORITIES, TICKET_STATUSES, Ticket, TicketListParams } from '../types';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
+import { normalizeError } from '../api/client';
 
 const SORT_OPTIONS = [
   { value: 'createdAt', label: 'Created date' },
@@ -24,10 +27,23 @@ const SORT_OPTIONS = [
 
 export function TicketListPage() {
   const { user } = useAuth();
+  const { showToast } = useToast();
   // Named explicitly (rather than inlined in the JSX below) so this can never be
   // mis-parenthesized into an operator-precedence bug again - both customers and
   // agents can file tickets; admins cannot (the server rejects that with 403).
   const canCreateTicket = user?.role === 'customer' || user?.role === 'agent';
+  // Every role can reassign a ticket right from this list - previously the only way to
+  // change an assignee at all was the admin-only Assignment dropdown buried on each
+  // ticket's detail page, so once a ticket had an assignee there was no visible way to
+  // hand it to someone else. The server independently enforces who can act on which
+  // ticket (see ticketService.updateTicket): an agent can only reassign a ticket
+  // already in their own queue, and a customer only a ticket they filed or are
+  // themselves assigned to - exactly the same tickets this list already shows them.
+  const canReassign = !!user;
+  const { data: assignableUsers } = useQuery(
+    () => (canReassign ? userService.listAssignableUsers() : Promise.resolve([])),
+    [canReassign],
+  );
   const { params, setParams } = useQueryParams();
   const [searchInput, setSearchInput] = useState(params.search ?? '');
   const debouncedSearch = useDebounce(searchInput, 350);
@@ -72,6 +88,16 @@ export function TicketListPage() {
       setParams({ sortOrder: params.sortOrder === 'asc' ? 'desc' : 'asc' });
     } else {
       setParams({ sortBy: field, sortOrder: 'asc' });
+    }
+  }
+
+  async function handleAssign(ticket: Ticket, assigneeId: string) {
+    try {
+      await ticketService.updateTicket(ticket._id, { assignedAgent: assigneeId || null });
+      showToast(`#${ticket.ticketNumber} reassigned`, 'success');
+      refetch();
+    } catch (err) {
+      showToast(normalizeError(err).message, 'error');
     }
   }
 
@@ -221,11 +247,26 @@ export function TicketListPage() {
                       <PriorityBadge priority={ticket.priority} />
                     </td>
                     <td>
-                      {ticket.assignedAgent
-                        ? `${ticket.assignedAgent.name}${
-                            ticket.assignedAgent.role ? ` - ${roleLabel(ticket.assignedAgent.role)}` : ''
-                          }`
-                        : 'Unassigned'}
+                      {canReassign ? (
+                        <Select
+                          label={`Assignee for ticket #${ticket.ticketNumber}`}
+                          hideLabel
+                          placeholder="Unassigned"
+                          options={(assignableUsers ?? []).map((u) => ({
+                            value: u.id,
+                            label: `${u.name} - ${roleLabel(u.role)}`,
+                          }))}
+                          value={ticket.assignedAgent?._id ?? ''}
+                          onChange={(e) => handleAssign(ticket, e.target.value)}
+                          style={{ minWidth: 160 }}
+                        />
+                      ) : ticket.assignedAgent ? (
+                        `${ticket.assignedAgent.name}${
+                          ticket.assignedAgent.role ? ` - ${roleLabel(ticket.assignedAgent.role)}` : ''
+                        }`
+                      ) : (
+                        'Unassigned'
+                      )}
                     </td>
                     <td>
                       <SlaBadge sla={ticket.slaStatus} />

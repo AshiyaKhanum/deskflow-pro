@@ -4,7 +4,7 @@ import * as slaService from '../services/slaService';
 import { Input } from '../components/ui/Input';
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
-import { ErrorState, LoadingState } from '../components/ui/States';
+import { EmptyState, ErrorState, LoadingState } from '../components/ui/States';
 import { useToast } from '../context/ToastContext';
 import { normalizeError } from '../api/client';
 import { SlaPolicy } from '../types';
@@ -27,24 +27,36 @@ export function AdminSlaPage() {
         </div>
       </div>
 
-      <div className="table-wrapper" style={{ marginBottom: 24 }}>
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th scope="col">Priority</th>
-              <th scope="col">Response time (h)</th>
-              <th scope="col">Resolution time (h)</th>
-              <th scope="col">Status</th>
-              <th scope="col">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {(data ?? []).map((policy) => (
-              <PolicyRow key={policy._id} policy={policy} onSaved={refetch} />
-            ))}
-          </tbody>
-        </table>
-      </div>
+      {(data ?? []).length === 0 ? (
+        <EmptyState
+          title="No SLA policies yet"
+          message="The server creates the default Low/Medium/High/Urgent policies automatically on startup - if you're seeing this, it may still be starting up after a recent deploy. Try again in a moment."
+          action={
+            <Button size="sm" onClick={refetch}>
+              Refresh
+            </Button>
+          }
+        />
+      ) : (
+        <div className="table-wrapper" style={{ marginBottom: 24 }}>
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th scope="col">Priority</th>
+                <th scope="col">Response time (h)</th>
+                <th scope="col">Resolution time (h)</th>
+                <th scope="col">Status</th>
+                <th scope="col">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(data ?? []).map((policy) => (
+                <PolicyRow key={policy._id} policy={policy} onSaved={refetch} />
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }

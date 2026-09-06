@@ -20,13 +20,20 @@ describe('Role-based access control', () => {
     expect(dashboard.status).toBe(403);
   });
 
-  it('returns 403 when a customer tries to create a ticket for someone else / directly assign', async () => {
+  it('returns 403 when a customer tries to change a ticket field other than its assignee', async () => {
     const { token } = await registerAndLogin('customer');
+    const createRes = await request(app)
+      .post('/api/tickets')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ title: 'My ticket', description: 'Enough detail to pass validation.', priority: 'low', category: 'general' });
+    const ticketId = createRes.body.data._id;
+
+    // Customers CAN reach PATCH /api/tickets/:id now (to reassign their own ticket - see
+    // ticketReassignment.test.ts), but the service still rejects any other field.
     const res = await request(app)
-      .patch('/api/tickets/000000000000000000000000')
+      .patch(`/api/tickets/${ticketId}`)
       .set('Authorization', `Bearer ${token}`)
       .send({ priority: 'high' });
-    // customers cannot PATCH tickets at all -> blocked by role middleware before the id is even looked up
     expect(res.status).toBe(403);
   });
 

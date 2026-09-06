@@ -1,9 +1,43 @@
-import { SlaPolicy } from '../models/SlaPolicy';
+import { SlaPolicy, DEFAULT_SLA_HOURS } from '../models/SlaPolicy';
 import { ApiError } from '../utils/ApiError';
-import { TicketPriority } from '../types/enums';
+import { TicketPriority, TICKET_PRIORITIES } from '../types/enums';
 
 export async function listSlaPolicies() {
   return SlaPolicy.find().sort({ priority: 1 });
+}
+
+/**
+ * Guarantees a policy document exists for every priority level (low/medium/high/urgent).
+ *
+ * Root cause this fixes: a brand-new database (e.g. a fresh production MongoDB that was
+ * never populated by the local-only `npm run seed` script - which is destructive and
+ * wipes users/tickets, so it must never be run against live data) has an empty
+ * SlaPolicy collection. Ticket creation never notices, because slaService.getActivePolicy()
+ * quietly falls back to DEFAULT_SLA_HOURS when no document exists - but the Admin > SLA
+ * Policies page lists the raw collection with no such fallback and no "create" UI, so it
+ * rendered table headers with zero rows and no way for an admin to add the missing ones.
+ *
+ * $setOnInsert only fills in a priority that's completely missing - it never touches (or
+ * resets) a policy an admin already customized, so this is safe to run on every server
+ * boot, not just once.
+ */
+export async function ensureDefaultSlaPolicies(): Promise<void> {
+  await Promise.all(
+    TICKET_PRIORITIES.map((priority) =>
+      SlaPolicy.findOneAndUpdate(
+        { priority },
+        {
+          $setOnInsert: {
+            priority,
+            responseTimeHours: DEFAULT_SLA_HOURS[priority].response,
+            resolutionTimeHours: DEFAULT_SLA_HOURS[priority].resolution,
+            isActive: true,
+          },
+        },
+        { upsert: true },
+      ),
+    ),
+  );
 }
 
 export async function upsertSlaPolicy(input: {

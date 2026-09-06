@@ -283,12 +283,26 @@ export async function updateTicket(
   if (!ticket) throw ApiError.notFound('Ticket not found');
   assertCanViewTicket(ticket, requesterId, requesterRole);
 
+  // A customer may reassign a ticket - and ONLY reassign it, nothing else (title,
+  // description, priority, category are still off-limits to them). This mirrors ticket
+  // creation, where a customer can already choose any eligible assignee up front - so
+  // being able to change that choice afterwards is the same permission, not a new one.
+  // It's safely scoped: assertCanViewTicket (above) already limits a customer to
+  // tickets they filed or are themselves assigned to, so this can never reach a
+  // stranger's ticket.
   if (requesterRole === 'customer') {
-    throw ApiError.forbidden('Customers cannot modify ticket fields directly');
+    const updateKeys = Object.keys(input) as Array<keyof UpdateTicketInput>;
+    const isAssignmentOnly = updateKeys.length > 0 && updateKeys.every((key) => key === 'assignedAgent');
+    if (!isAssignmentOnly) {
+      throw ApiError.forbidden('Customers can only change who a ticket is assigned to');
+    }
   }
-  if (input.assignedAgent !== undefined && requesterRole !== 'admin') {
-    throw ApiError.forbidden('Only admins can (re)assign tickets');
-  }
+  // Agents and admins can both (re)assign a ticket - to any eligible active user, not
+  // just to themselves. This was previously admin-only, which meant an agent who
+  // picked up a ticket had no way to hand it off to a teammate. It's still safely
+  // scoped: assertCanViewTicket (above) already limits an agent to tickets assigned to
+  // them or created by them, so this never lets an agent touch a ticket outside their
+  // own queue - it only lets them redirect the tickets they can already see.
 
   const historyEntries: ITicket['history'] = [];
 

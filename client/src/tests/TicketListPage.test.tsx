@@ -1,13 +1,17 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { axe } from 'jest-axe';
 import { MemoryRouter } from 'react-router-dom';
 import { TicketListPage } from '../pages/TicketListPage';
+import { ToastProvider } from '../context/ToastContext';
 import * as ticketService from '../services/ticketService';
+import * as userService from '../services/userService';
 import { useAuth } from '../context/AuthContext';
-import { Ticket } from '../types';
+import { Ticket, User } from '../types';
 
 vi.mock('../services/ticketService');
+vi.mock('../services/userService');
 vi.mock('../context/AuthContext', () => ({
   useAuth: vi.fn(),
 }));
@@ -32,6 +36,11 @@ const mockTicket: Ticket = {
   updatedAt: new Date().toISOString(),
 };
 
+const mockAssignableUsers: User[] = [
+  { id: 'a1', name: 'Jordan Blake', email: 'jordan@example.com', role: 'agent', avatarColor: '#111', isActive: true, createdAt: '' },
+  { id: 'a2', name: 'Priya Nair', email: 'priya@example.com', role: 'agent', avatarColor: '#222', isActive: true, createdAt: '' },
+];
+
 function renderPage(role: 'customer' | 'agent' | 'admin' = 'customer') {
   vi.mocked(useAuth).mockReturnValue({
     user: { id: 'c1', name: 'Sam Rivera', email: 'sam@example.com', role, avatarColor: '#000', isActive: true, createdAt: '' },
@@ -44,7 +53,9 @@ function renderPage(role: 'customer' | 'agent' | 'admin' = 'customer') {
 
   return render(
     <MemoryRouter>
-      <TicketListPage />
+      <ToastProvider>
+        <TicketListPage />
+      </ToastProvider>
     </MemoryRouter>,
   );
 }
@@ -56,6 +67,7 @@ describe('TicketListPage', () => {
       tickets: [],
       pagination: { page: 1, limit: 10, total: 0, totalPages: 1 },
     });
+    vi.mocked(userService.listAssignableUsers).mockResolvedValue(mockAssignableUsers);
   });
 
   it('shows a loading state, then renders ticket rows', async () => {
@@ -118,5 +130,44 @@ describe('TicketListPage', () => {
     renderPage('admin');
     await waitFor(() => expect(screen.getByText('Tickets')).toBeInTheDocument());
     expect(screen.queryByRole('link', { name: /\+ new ticket/i })).not.toBeInTheDocument();
+  });
+
+  it('lets an agent reassign a ticket right from the list, without opening it', async () => {
+    vi.mocked(ticketService.listTickets).mockResolvedValue({
+      tickets: [mockTicket],
+      pagination: { page: 1, limit: 10, total: 1, totalPages: 1 },
+    });
+    vi.mocked(ticketService.updateTicket).mockResolvedValue({
+      ...mockTicket,
+      assignedAgent: { _id: 'a2', name: 'Priya Nair', email: 'priya@example.com' },
+    });
+
+    renderPage('agent');
+    const assigneeSelect = await screen.findByLabelText(/assignee for ticket #1001/i);
+    await userEvent.selectOptions(assigneeSelect, 'a2');
+
+    await waitFor(() =>
+      expect(ticketService.updateTicket).toHaveBeenCalledWith('t1', { assignedAgent: 'a2' }),
+    );
+    expect(await screen.findByText(/reassigned/i)).toBeInTheDocument();
+  });
+
+  it('also lets a customer reassign their own ticket right from the list', async () => {
+    vi.mocked(ticketService.listTickets).mockResolvedValue({
+      tickets: [{ ...mockTicket, assignedAgent: { _id: 'a1', name: 'Jordan Blake', email: 'jordan@example.com', role: 'agent' } }],
+      pagination: { page: 1, limit: 10, total: 1, totalPages: 1 },
+    });
+    vi.mocked(ticketService.updateTicket).mockResolvedValue({
+      ...mockTicket,
+      assignedAgent: { _id: 'a2', name: 'Priya Nair', email: 'priya@example.com' },
+    });
+
+    renderPage('customer');
+    const assigneeSelect = await screen.findByLabelText(/assignee for ticket #1001/i);
+    await userEvent.selectOptions(assigneeSelect, 'a2');
+
+    await waitFor(() =>
+      expect(ticketService.updateTicket).toHaveBeenCalledWith('t1', { assignedAgent: 'a2' }),
+    );
   });
 });

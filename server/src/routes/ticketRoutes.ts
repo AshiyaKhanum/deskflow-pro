@@ -19,7 +19,15 @@ router.get('/', validate(listTicketsQuerySchema, 'query'), ticketController.list
 router.post('/', authorize('customer', 'agent'), validate(createTicketSchema), ticketController.createTicket);
 
 router.get('/:id', ticketController.getTicket);
-router.patch('/:id', authorize('agent', 'admin'), validate(updateTicketSchema), ticketController.updateTicket);
+// Customers may reach this endpoint too - but ticketService.updateTicket restricts them
+// to changing only assignedAgent (nothing else), enforced server-side, not just hidden
+// in the UI.
+router.patch(
+  '/:id',
+  authorize('customer', 'agent', 'admin'),
+  validate(updateTicketSchema),
+  ticketController.updateTicket,
+);
 router.delete('/:id', authorize('admin'), ticketController.deleteTicket);
 
 router.patch(
